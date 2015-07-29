@@ -6,9 +6,10 @@ This R package provides data and code for all of the tables and figures, to the 
 This project began several years ago to teach myself how to use R and (applied) statistics. The code base has not been updated, and definitely does not reflect my current "best" (better) coding practices. The code also does not use the current package structure or internal data to perform the computations (yet). These will be updated in time.
 
 Things to expect
-1. Code that actually uses the packaged data
-2. Proper package commenting throughout
-3. Deliver the code through the `example` utility, such as `example(ch1, "ALSM")` 
+
+1.  Code that actually uses the packaged data
+2.  Proper package commenting throughout
+3.  Deliver the code through the `example` utility, such as `example(ch1, "ALSM")` 
 
 For original data files, visit author's book site: https://netfiles.umn.edu/users/nacht001/www/nachtsheim/5th/
 
