@@ -1,0 +1,466 @@
+# Load the data sets
+env <- new.env()
+load("data.rda", envir = env)
+
+
+
+# Input the Toluca Company Data
+df  <- get("CH01TA01", envir = env)
+names(df) <- c('x', 'y')
+fit <- lm(y ~ x, df)
+
+
+
+# FIGURE 3.1     (p 101)
+# Diagnostic Plots for Predictor Variable--Toluca Company Example
+par(mfrow = c(2, 2), pch = 19)
+stem(df$x, scale=3)  # Printed to screen, not graphics window
+
+dotchart(df$x, xlab = "Lot Size", main = "(a) Dot Plot")
+
+plot(df$x, type = "b", lty = 2, xlab = "Run", ylab = "Lot Size")
+title("(b) Sequence Plot")
+
+boxplot(df$x, horizontal = TRUE, xlab = "Lot Size", main = "(d) Box Plot")
+
+
+
+# FIGURE 3.2     (p 104)
+# Diagnostic Residual Plots--Toluca Company Example
+par(mfrow = c(2, 2), pch = 19)
+
+plot(df$x, resid(fit), xlab = "Lot Size", ylab = "Residual")
+title("(a) Residual Plot against x")
+
+plot(resid(fit), type = "b", lty = 2, xlab = "Run", ylab = "Residual")
+title("(b) Sequence Plot")
+
+boxplot(resid(fit), horizontal = TRUE, xlab = "Residual")
+title("(c) Box Plot")
+
+qqnorm(resid(fit), xlab = "Expected", ylab = "Residual", main = "")
+title("(d) Normal Probability Plot")
+qqline(resid(fit))
+
+
+
+# Input The Transit Data
+df <- get("CH03TA01", envir = env)
+names(df) <- c('y', 'x')
+fit <- lm(y ~ x, df)
+
+
+
+# FIGURE 3.3     (p 105)
+# Scatter Plot and Residual Plot Illustrating
+# Nonlinear Regression--Transit Example
+par(mfrow = c(2, 2))
+
+plot(y ~ x, df, ylim = c(0, 8), main = "(a) Scatter Plot")
+abline(fit)
+
+plot(df$x, resid(fit), main = "(b) Residual Plot")
+abline(0, 0)
+
+
+
+# TABLE 3.1     (p 105)
+# Number of Maps Distributed and Increase in Ridership--Transit Example
+cbind(
+  "Increase in Ridership" = df$y,
+  "Maps Distributed"      = df$x,
+  "Fitted Values"         = round(fitted(fit), 2),
+  "Residuals"             = round(resid(fit), 2) 
+);
+
+
+
+# Input Toluca Company Data And Reset Model
+df  <- get("CH01TA01", envir = env)
+names(df) <- c('x', 'y')
+fit <- lm(y ~ x, df)
+
+
+
+# TABLE 3.2     (p 111)
+# Residuals and Expected Values under Normality--Toluca Company Example
+# 
+# Could obtain mean square error from model directly using
+#     anova(fit)[2, "Mean Sq"]
+cbind(
+  "Residual"                   = round(resid(fit), 2),
+  "Rank"                       = rank(resid(fit)),
+  "Exp. Value under Normality" = round(             # eq. (3.6)
+     sqrt(deviance(fit) / df.residual(fit)) *       # Mean Square = Sum Sq / df
+     qnorm( (rank(resid(fit)) - 0.375) / ( nrow(data) + 0.25) ), 2) 
+);
+
+
+
+# TABLE 3.3     (p 117)
+# Calculations for Brown-Forsythe Test for Constancy
+# of Error Variance--Toluca Company Example
+#
+# This complex function will print out the conclusion from the decision rule
+# regarding this test. All of the respective elements are contained within
+# the return object. If this object is not caught, it will display to the
+# screen as displayed below.
+#
+# For completeness, the "car" library has a levene test function called
+# leveneTest. It requires the data have a factor by which to group the
+# observations. This is performed using the cut function on the independent
+# variable. Thus, we use the test on the response variable grouped by the cut
+# independent variable as demonstrated below. The outcome of interest is the
+# p-value which is greater than our alpha. We fail to reject the null
+# hypothesis of equal variance, the same conclusion the authors derived. By
+# default leveneTest uses median values (Brown-Forsythe test), and it uses an
+# F-test instead of the t-test. Unfortunately, there is nothing of interest
+# returned with the test object beyond what is displayed.
+levene <- function(model, alpha = 0.05) {
+  data <- model.frame(model)  # Grab the data used in the model
+
+  data <- transform(data,     # Append the residuals and splitting factor
+    e = resid(model),
+    group = cut(x, 2, labels = LETTERS[1:2])
+  );  # End transformation
+
+                              # Split by group factor and add last TABLE 3.3
+                              # columns. Notice the syntax for within()
+  data.split <- with(data, split(subset(data, select = -group), group))
+  data.split <- lapply(data.split,
+    function(x) within(x,
+    {
+      dsqdev = scale(abs(e - median(e)), T, F)^2
+      d      = abs(e - median(e))                 
+    }  # End within function
+  ))  # End lapply
+
+                              # Define the relevant variables for
+                              # hypothesis test and return object
+  SSd     <- lapply(data.split, function(x) sum(x$dsqdev))
+  dbar    <- lapply(data.split, function(x) mean(x$d))
+  n       <- c(Total = nrow(data), lapply(data.split, nrow))   # List of n's
+  s       <- sqrt( (SSd$A + SSd$B) / (n$Total - 2) )           # sqrt of (3.9a)
+  tstar   <- (dbar$A - dbar$B) / (s * sqrt(1/n$A + 1/n$B))     # (3.9)
+  tval    <- qt(1 - alpha/2, n$Total - 2)
+  p.value <- 2 * pt(-abs(tval), n$Total - 1)                   # = 0.0495
+
+  ifelse(abs(tstar) <= tval,  # Print conclusion of the decision rule
+    print("error variance is constant"),
+    print("error variance is not constant")
+  ); # end ifelse
+
+  data <- list(               # return split data and defined variables
+    data = data.split,   p.value = p.value,     tstar = tstar,     tval = tval,
+    dbar = unlist(dbar), SSd     = unlist(SSd), n     = unlist(n), s    = s 
+  )  # End list
+
+  return(data)
+}  # end levene function
+
+library(car)
+levene(fit)
+with(df, leveneTest(y, cut(x, 2)))  # F value is within acceptance region
+
+rm(levene)
+
+
+
+# Breusch-Pagan Test     (p 118)
+#
+# R has a method for calculating this contained in the "lmtest" library. It
+# defaults to a studentized BP test, so an extra parameter will be passed.
+#
+# Note: The authors have retained an error in this 5th edition since the 4th.
+#       They claim a p-value of 0.64 > alpha which is inconsistent with their
+#       results and the outcome of the bptest command. The true p-value
+#       provided appears to be 1 - 0.64 = 0.36
+library(lmtest)
+bptest(fit, student = FALSE); qchisq(1 - 0.05, 1) # BP falls within the
+                                                  # chisq acceptance region
+
+
+
+# Input the Bank Data
+df <- get("CH03TA04", envir = env)
+names(df) <- c('x', 'y')
+fit <- lm(y ~ x, df)
+
+
+
+# TABLE 3.4     (p 120)
+# Data and Analysis of Variance Table--Bank Example
+as.table(cbind(
+  "Size of Min. Deposit"   = df$x,
+  "Number of New Accounts" = df$y
+))
+anova(fit)
+
+
+
+# FIGURE 3.11     (p 121)
+# Scatter Plot and Fitted Regression Line--Bank Example
+plot(y ~ x, df)
+abline(fit)
+
+
+
+# TABLE 3.5     (p 121)
+# Data Arranged by Replicate Number and Minimum Deposit--Bank Example
+tab           <- do.call("cbind", unstack(df, y ~ x))
+tab[2, 4]     <- NA  # The singular "150" level value is duplicated; remove it
+tab           <- rbind(tab, colMeans(tab, na.rm = TRUE))
+dimnames(tab) <- list(Replicate = c(1:2, "Mean"), Deposit = dimnames(tab)[[2]])
+(tab          <- as.table(tab))
+
+rm(tab)
+
+
+
+# TABLE 3.6     (p 126)
+# General ANOVA Table for Testing Lack of Fit of Simple#
+# Linear Regression Function and ANOVA Table--Bank Example#
+#
+# While R has a basic anova table for lm objects, there is a trick to obtain#
+# a further decomposition for the lack of fit and pure error. In particular,#
+# with a "y ~ x" regression, we can model "y ~ x + factor(x)" to obtain an#
+# anova table with the desired values. Also, the alr3 package contains a#
+# function pureErrorAnova that gives a more complete anova table.#
+#
+# For numeric subscripting, the following will be utilized
+#   Number    Rows                      Columns
+#   1         x         (Regression)    Df
+#   2         factor(x) (lack of fit)   Sum Sq
+#   3         Residuals (pure error)    Mean Sq
+fit.aov <- anova(update(fit, . ~ . + factor(x)))
+as.table(
+  cbind(
+  SS = c(SSR   =     fit.aov[1,   2], 
+         SSE   = sum(fit.aov[2:3, 2]),
+         SSLF  =     fit.aov[2,   2],
+         SSPE  =     fit.aov[3,   2],
+         Total = sum(fit.aov[1:3, 2])
+         ), 
+
+  Df = c(            fit.aov[1,   1],
+                 sum(fit.aov[2:3, 1]),
+                     fit.aov[2,   1],
+                     fit.aov[3,   1],
+                 sum(fit.aov[1:3, 1])
+        ),  
+
+  MS = c(            fit.aov[1,   3],
+                 sum(fit.aov[2:3, 2]) / sum(fit.aov[2:3, 1]),  # MSE = SSE / Df
+                     fit.aov[2,   3],
+                     fit.aov[3,   3],
+                     NA
+        )  
+  )  # end cbind
+);  # end table
+
+rm(fit.aov)
+
+
+
+# Input the Sales Training data
+df <- get("CH03TA07", envir = env)
+names(df) <- c('x', 'y')
+fit <- lm(y ~ x, df)
+
+
+
+# TABLE 3.7     (p 130)
+# Use of Square Root Transformation of X to Linearize
+# Regression Relation--Sales Training Example
+(df <- transform(df, sqrtx = sqrt(x)) )
+
+
+
+# FIGURE 3.14     (p 131)
+# Scater Plots and Residual Plots--Sales Training Example
+par(mfrow = c(2, 2), pch = 19)
+plot(y ~ x, df, xlab = "Days", ylab = "Performance")
+title("(a) Scatter Plot")
+
+plot(y ~ sqrt(x), df, xlab = expression(sqrt(x)), ylab = "Performance")
+title(expression(paste("(b) Scatter Plot against ", sqrt(x))))
+
+plot(resid(fit) ~ sqrt(x), df, xlab = expression(sqrt(x)), ylab = "Residual")
+title(expression(paste("(c) Residual Plot against ", sqrt(x))))
+
+qqnorm(resid(fit), xlab = "Expected", ylab = "Residual", main = "")
+title("(d) Normal Probability Plot")
+
+
+
+# Input the Plasma Levels data
+df <- get("CH03TA08", envir = env)
+names(df) <- c("x", "y", "z")
+fit <- lm(z ~ x, df)
+
+
+
+
+# TABLE 3.8     (p 133)
+# Use of Logarithmic Transformation of Y to Linearize Regression
+# Relation and Stabilize Error Variance--Plasma Levels Example
+with(df, data.frame("Age" = x, "Plasma" = y, "Transform" = z))
+
+
+
+# FIGURE 3.16     (p 134)
+# Scatter Plots and Residual Plots--Plasma Levels Example
+par(mfrow = c(2, 2), pch = 19)
+plot(y ~ x, df, xlab = "Age", ylab = "Plasma Level")
+title("(a) Scatter Plot")
+
+plot(z ~ x, df, xlab = "Age")
+title("(b) Scatter Plot with Y' = log(Y)")
+
+plot(df$x, resid(fit)*100, xlab = "Age", ylab = "Residual x 100")
+title("(c) Residual Plot against X")
+abline(0, 0)
+
+qqnorm(resid(fit), xlab = "Expected Valued", ylab = "Residual", main = "")
+title("(d) Normal Probability Plot")
+
+
+
+# TABLE 3.9 and Figure 3.17    (p 136)
+# Box-Cox Results--Plasma Levels Example
+#
+# R has two Box-Cox functions: boxcox (MASS) and boxCox (car). They both take
+# a linear model object as their input. They both produce a graph that
+# maximizes the  log-likelihood rather than minimize the sum of squares
+# error. The result is the same.
+library(MASS)
+library(car)
+
+par( mfrow = c(2, 2) )
+boxcox(lm(y ~ x, df))
+boxCox(lm(y ~ x, df))   
+boxcox.sse <- function(lambda, model) {
+  x  <- model.frame(model)$x
+  y  <- model.frame(model)$y
+  K2 <- prod(y)^( 1/length(y) )            # (3.36a)
+  K1 <- 1 / (lambda * K2^(lambda - 1))     # (3.36b)
+  ifelse(lambda != 0,                      # (3.36)
+    assign("W", K1 * (y^lambda - 1)),
+    assign("W", K2 * log(y))
+  )  # end ifelse
+
+  return(deviance(lm(W ~ x)))  # Deviance = Residual Sum of Squares
+} # end boxcox
+
+tab <- cbind(lambda = seq(-2, 2, by = 0.1))
+tab <- transform(tab, SSE = apply(tab, 1, boxcox.sse, lm(y ~ x, df))
+);  # end transformation
+
+plot(tab, type = "l", lty = 3, xlab = expression(lambda))
+
+print(tab)
+rm(tab, boxcox.sse)
+
+
+
+# Input the Toluca Company Data
+df <- get("CH01TA01", envir = env)
+names(df) <- c('x', 'y')
+fit  <- lm(y ~ x, df)
+
+
+
+# FIGURE 3.19     (p 140)
+# Lowess Curve and Confidence Band for
+# Regression Line--Toluca Company Example
+#
+# R has methods for lowess regression (loess) and loess plotting. We will
+# simply make use of these faculties. As stated in the Chapter 2 walk-through
+# we will plot confidence bands using the built-in R function predict.
+#
+# The R function scatter.smooth plots both the scatter plot and lowess curve.
+#
+# FIGURE 3.18 will be ignored since it can be generated in the same manner.
+with(df, scatter.smooth(x, y))  # Compare
+title("Lowess Curve and Linear Regression Confidence Bands")
+
+plot(y ~ x, df, xlab = "Lot Size", ylab = "Hours")
+title("Lowess Curve and Linear Regression Confidence Bands")
+with(df, lines(loess.smooth(x, y), col = "red"))
+
+# Gather confidence bands, ordered by x, and add lines to plot
+ci <- cbind(model.frame(fit), predict(fit, int = "c"))[order(df$x), ]
+lines(lwr ~ x, ci, col = "blue", lty = "dashed" )
+lines(upr ~ x, ci, col = "blue", lty = "dashed" )
+
+rm(ci)
+
+
+
+# Input the Plutonium Measurement Data
+df <- get("CH03TA10", envir = env)
+names(df) <- c("y", "x")
+
+
+
+# TABLE 3.10     (p 141)
+# Basic Data--Plutonium Measurement Example
+cbind("Plutonium Activity" = df$x, "Alpha Count Rate" = df$y);
+
+
+
+# FIGURE 3.20     (p 142)
+# Scatter Plot and Lowess Smoothed Curve--Plutonium Measurement Example
+# Analytically confirm nonconstant variance by the BP test
+plot(y ~ x, df, pch = 19, xlab = "pCi/g", ylab = "#/sec")
+with(df, lines(loess.smooth(x, y)))  # Warnings may occur
+
+c(Stat  = bptest(lm(y ~ x, df), student = FALSE)$statistic,
+  Chisq = pchisq(.95, 1))  # BP falls outside acceptance region: Reject H0
+
+
+
+# FIGURE 3.21 FIGURE 3.22 and FIGURE 3.23     (p 143-5)
+# Regression Output and Diagnostic Plots--Plutonium Measurement Example
+df <- df[-24, ]  # Remove outlier: Record 24
+df <- transform(df, sqrty = sqrt(y), sqrtx = sqrt(x))
+
+# Linear Models Summay and Anova
+summary(lm(y     ~ x, df));       anova(lm(y     ~ x, df))
+summary(lm(sqrty ~ x, df));       anova(lm(sqrty ~ x, df))
+summary(lm(sqrty ~ sqrtx, df));   anova(lm(sqrty ~ sqrtx, df)) 
+
+pplot <- function(formula, data) {
+  fit <- lm(formula, data)
+  plot(resid(fit) ~ fitted(fit), xlab = "Fitted", ylab = "Residual")
+  title("(b) Residual Plot")
+  abline(0, 0)
+  
+  qqnorm(resid(fit), xlab = "Expected", ylab = "Residual", main = "")
+  title("(c) Normal Probability Plot")
+  qqline(resid(fit))
+}
+
+par(mfrow = c(3, 2), pch = 19)
+pplot(y ~ x, df)          # Untransformed Plots (FIGURE 3.21)
+pplot(sqrty ~ x, df)      # Transformed Response Plots (FIGURE 3.22)
+pplot(sqrty ~ sqrtx, df)  # Transformed Response and Predictor Plots (FIGURE 3.23)
+
+rm(pplot)
+
+dev.off()  # when finished with the above, view (d)
+
+
+scatter.smooth(df$sqrtx, df$sqrty, main = "(d) Confidence Band", pch = 19,
+  xlab = expression(sqrt(x)), ylab = expression(sqrt(y)))
+newdata = data.frame(sqrtx = sort(df$sqrtx))
+pp <- predict(fit, newdata, int = "c")
+lines(newdata$sqrtx, pp[, 2], col = "blue")
+lines(newdata$sqrtx, pp[, 3], col = "blue")
+
+
+
+# Clean up the R environment from this session
+rm(df, fit, pp, newdata)
+
+rm(env)  # Ignore this if you're moving on to the next chapter.
