@@ -9,8 +9,8 @@ Things to expect
 
 1.  Code that actually uses the packaged data
 2.  Proper package commenting throughout
-3.  Deliver the code through the `demo` utility, such as `demo("ch1", "ALSM")`
-4.  Delivery the code and results through vignettes (this may be a "code-less" package then!
+3.  Deliver the examples through the `demo` utility, such as `demo("ch1", "ALSM")`
+4.  Delivery the examples through vignettes (this may be a "code-less" package then!)
 
 For original data files, visit author's book site: https://netfiles.umn.edu/users/nacht001/www/nachtsheim/5th/
 
