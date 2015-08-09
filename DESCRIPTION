@@ -4,6 +4,26 @@ Version: 0.1
 Authors@R: person("Bryan", "Goodrich", email = "goodrich.bryan@gmail.com", role = c("aut", "cre"))
 Description: Provides data and execution code for the figures and tables in Kutner, et al ALSM.
 Depends: R (>= 3.2.1)
-License: Creative Commons
+Suggests:
+    HH,
+    knitr,
+    MASS,
+    MPV,
+    RColorBrewer,
+    Rcmdr,
+    SuppDists,
+    alr3,
+    bestglm,
+    boot,
+    car,
+    lattice,
+    leaps,
+    lmtest,
+    nnet,
+    rgl,
+    rpart,
+    scatterplot3d
+VignetteBuilder: knitr
+License: GPL-3
 LazyData: true
 

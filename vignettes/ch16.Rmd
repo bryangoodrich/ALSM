@@ -1,0 +1,230 @@
+---
+title: "Chapter 16 Single Factor Studies"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 16}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 16 -- Single-Factor Studies
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+library(lattice)       # xyplot
+library(RColorBrewer)  # brewer.pal
+
+data("CH16TA01", package = "ALSM")
+```
+
+
+FIGURE 16.2     (p 680)
+----------------------------------------------------------------------------
+
+#### Analysis of Variance Model Representation--Incentive Pay Example
+
+This example is not computationally interesting, but I present a brute force way of depicting the representations in R, given the relevant information provided on page 683.
+
+```{r}
+curve(dnorm(x, mean = 58, sd = 4), 40, 110, ylim = c(0, .2), xlab = "", ylab = "", col = "green")
+text(58, .11, "Type 2", cex = .75)
+
+curve(dnorm(x, mean = 70, sd = 4), add = TRUE, col = "blue")
+text(70, .11, "Type 1", cex = .75)
+
+curve(dnorm(x, mean = 84, sd = 4), add = TRUE, col = "red")
+text(84, .11, "Type 4", cex = .75)
+
+curve(dnorm(x, mean = 90, sd = 4), add = TRUE)
+text(90, .11, "Type 3", cex = .75)
+points(c(51, 78), c(0, 0), pch = 19)
+```
+
+
+Input Kenton Food Company Data
+----------------------------------------------------------------------------
+
+```{r}
+.data  <- CH16TA01
+names(.data) <- c("y", "x1", "x2")
+```
+
+
+TABLE 16.1     (p 686)
+----------------------------------------------------------------------------
+
+#### Number of Cases Sold by Stores for Each of Four Package Designs--Kenton Food Company Example
+
+One may be tempted to use `xtabs` and `addmargins` to accomplish a similar table, but there are 2 problems with this. First, the sums of package sums or the means of package means, cannot be calculated in `addmargins` and requires processing the resultant margin table. Second, `xtabs` automatically fills the non-combination as `0`. This posses problems for the means. 
+
+Regardless, getting an accurate count requires a little trickery. The reason is that the use of `length` will recognize NA or `0` as a record in the count. Instead, if you have NA you can say `sum(!is.na(x))` to boolean (unit) sum all the non-NA values. In a similar fashion below, we simply boolean sum the values that are nonzero. The rest are processed using `tapply`, which is the preferred vector way of handling grouped operations. There is also `by` that is more flexible in that it can handle non-vector (data frame) objects. 
+
+```{r}
+cbind('Table' = addmargins(xtabs(y ~ x1 + x2, .data), 2),
+      'Mean'  = tapply(.data$y, .data$x1, mean),
+      'n'     = tapply(.data$y, .data$x1, function(r) sum(r > 0)))
+                                    
+with(.data, c("Y.."   = sum(tapply(y, x1, sum)), 
+           "Ybar." = mean(tapply(y, x1, mean)),
+           "n.."   = sum(tapply(y, x1, function(r) sum(r > 0)))))
+```
+
+
+FIGURE 16.3     (p 686)
+----------------------------------------------------------------------------
+
+#### Plot of Number of Cases Sold by Package Design--Kenton Food Company Example
+
+Since the last chapter demonstrated how convoluted it can become to plot some of these diagrams, we shall make use of `xyplot` (*lattice*) to simply our results. Though, as shown below, it can be convoluted to properly specify `xyplot` parameters, too!
+
+In this example, we make use of *RColorBrewer* to get good color combinations. The function `brewer.pal` takes in the number of categories and color palette you want. See the Color Brewer website for examples (generally associated with choropleth mapping).
+
+> http://colorbrewer2.org/
+
+Note, the coloring isn't important for this analysis because we're not looking at the within-subject (store) variability, but if we were, we would want to see how they change, and maybe even plot the connecting lines as in the examples in Chapter 15. An alternative here would be to use `ggplot` (*ggplot2*). It has a lot of parameters, but a far superior semantics in controlling your plotting objects and how you specify parameters. For instance, a simple version of this plot would be the following.
+
+> `ggplot(.data, aes(factor(x1), y)) + geom_point()`
+
+```{r}
+pal <- brewer.pal(5, "Set1")
+xyplot(y ~ factor(x1), .data, groups = x2, auto.key = list(columns = 5), 
+       par.settings = simpleTheme(col = pal, pch = 19), 
+       xlab = "Package Design", ylab = "Cases Sold", main = "Summary Plot")
+```
+
+
+TABLE 16.2     (p 689)
+----------------------------------------------------------------------------
+#### Residuals--Kenton Food Company Example
+
+Since all that is really going on in this manual calculation is to take the difference of the value from its mean (centering) for a given group, we can use `tapply` or `by` on the response, splitting it by the factor and using `scale` to center the group. For convenience, we'll simply append these residuals to the data frame to make a table.
+
+```{r}
+.data <- transform(.data, u = unlist(tapply(y, x1, scale, scale = FALSE)))
+addmargins(xtabs(u ~ x1 + x2, .data, sparse = TRUE), 2)  # Their sums are as 0 as it gets in R.
+```
+
+
+FIGURE 16.5     (p 695)
+----------------------------------------------------------------------------
+#### Output for Single-Factor Analysis of Variance--Kenton Food Company Example
+
+Note that "Root Mean Square Error" is just the "Residual Standard Error" in the `aov` output. Also, "C. Total" is just the aggregate.
+
+Included here are examples of the `aov` object which encodes the same information. The utility of `aov` comes out when you need to use different error structures. In this case, just using `lm` and `anova` on such an object is congruent to using `aov` and `summary.lm` on such an object--i.e., `summary` on an `aov` is the same as `anova` on an `lm` object and `summary.lm` on an `aov` is the same as `summary` on an `lm` object. 
+
+```{r}
+.data <- transform(.data, x1 = factor(x1))
+fit <- lm(y ~ x1 - 1, .data)  # This is the cell means model
+
+anova(fit)
+summary(aov(y ~ factor(x1) - 1, .data))  # Same as anova(fit)
+
+summary(fit)  # Notice that the coefficients are just the group means
+summary.lm(aov(fit))  # Same as summary(fit)
+
+confint(fit)
+summary(fit)$f[1] <= qf(1-.05, 4-1, 19-4)  # F-test; Conclude H0?
+```
+
+
+
+TABLE 16.4 and Examples     (p 707-12)
+----------------------------------------------------------------------------
+
+#### Regression Approach to the Analysis of Variance--Kenton Food Company Example
+#### Factor Effects Model with Weighted Means--Kenton Food Company Example
+#### Cell Means Model--Kenton Food Company Example
+
+In the next chapter, this will be recognized as defining contrasts (here defined on page 708). In R, you can define a matrix for that contrast and set it up as the contrast to use when you do your linear fit. In this way, the linear model will contain the comparison information you want. Since this would otherwise be a tedious task of recoding variables to run a regression on them, I'll leave that as an exercise to the interested reader.
+
+```{r}
+# ANOVA as Regression Model (16.79)
+contrasts(.data$x1) <- matrix(c(1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 1, -1), 4, 3)
+fit <- lm(y ~ x1, .data)
+model.matrix(fit)
+summary(fit)
+anova(fit)
+
+
+# ANOVA as Factor Effects Model with Weighted Means (16.82)
+contrasts(.data$x1) <- matrix(c(1, 0, 0, -1, 0, 1, 0, -1, 0, 0, 1, -0.8), 4, 3)
+fit <- lm(y ~ x1, .data)
+model.matrix(fit)
+summary(fit)
+anova(fit)
+
+
+# ANOVA as Cell Means Model (16.85)
+contrasts(.data$x1) <- matrix(c(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1), 4, 4)
+fit <- lm(y ~ x1 - 1, .data)  # This is the original model fitted
+model.matrix(fit)
+summary(fit)
+anova(fit)
+```
+
+
+
+
+TABLE 16.5 and FIGURE 16.8     (p 715)
+----------------------------------------------------------------------------
+
+#### Randomization Samples and Test Statistics--Quality Control Example
+#### Randomization Distribution of F* and Corresponding F Distribution--Quality Control Example
+
+Since there is no algorithm to compute this example we had to devise one. It should come as rather straight-forward. The Xi's are as in the above examples. The 'y' will hold the 1,680 cases of 9-sequences consisting of the response variables. The 'ti' implies the treatment group. In this case t1 is the first group (3-sequence) and t12 is the composite of t1 and t2. The 'remainder' function is a wrapper for grabing a subset of 'set' based on those values not in 'x'. The 'seq6' is the 6-sequence remainder after t1 is defined. The whole process took less than 10 seconds on a 2.4 GHz processor. As for the output, the columns are arbitrarily labeled 1-9. Clearly they represent the three treatment groups based on groups of three. The function 'f' uses the matrix algebra discussed in Ch. 5. It is possible to get away with merely fitting an 'lm' object, and then extract the f-statistic in a single call. However, this requires a lot of additional work for each of the 1680 rows. That approach took somewhere between 30-60 seconds to produce the same result.
+
+```{r}
+remainder <- function(x, set) set[!set %in% x]
+f <- function(Y, X) {
+  Y <- matrix(Y)                                # Turn row-vector into column
+  p <- ncol(X)
+  n <- nrow(X)
+  J <- matrix(1, n, n)                          # (5.18)
+  H <- X %*% solve(t(X) %*% X) %*% t(X)         # (5.73a)
+  SSE <- t(Y) %*% (diag(n) - H) %*% Y           # (5.89b)
+  SSR <-  t(Y) %*% (H - (1/n)*J) %*% Y          # (5.89c)
+  fstar <- (SSR / (p - 1)) / (SSE / (n - p))    # (6.39b)
+}
+
+base <- c(1.1, 0.5, -2.1, 4.2, 3.7, 0.8, 3.2, 2.8, 6.3)
+t2   <- t12 <- t123 <- list()
+y    <- NULL
+X    <- cbind(
+  X1 = c(1, 1, 1, 0, 0, 0, 0, 0, 0),
+  X2 = c(0, 0, 0, 1, 1, 1, 0, 0, 0),
+  X3 = c(0, 0, 0, 0, 0, 0, 1, 1, 1))
+
+t1   <- t(combn(base, 3))
+seq6 <- t(combn(base, 3, remainder, set = base))
+
+for (i in 1:84)  t2[[i]] <- t(combn(seq6[i, ], 3))
+for (i in 1:84) t12[[i]] <- cbind(t1[i, 1], t1[i, 2], t1[i, 3], t2[[i]])
+for (i in 1:84)
+  t123[[i]] <- cbind(t12[[i]], t(apply(t12[[i]], 1, remainder, set = base)))
+for (i in 1:84) y <- rbind(y, t123[[i]])
+
+fstar <- apply(y, 1, function(Y) f(Y, X))
+
+hist(fstar, freq = FALSE, ylim = c(0, 1), col = "gray90", main = "")
+curve(df(x, 2, 6), add = TRUE, lwd = 2)
+
+# LAST EXAMPLE FOR CHAPTER, fyi
+# BIG OUTPUT TO FOLLOW! 
+cbind(y, data.frame(f = fstar))
+```
+

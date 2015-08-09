@@ -1,0 +1,320 @@
+---
+title: "Chapter 18 Anova Diagnostics and Remedial Measures"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 18}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 18 -- ANOVA Diagnostics and Remedial Measures
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+library(SuppDists)  # qmaxFratio
+library(HH)         # hov
+library(MASS)       # boxcox
+
+data("CH17TA02", package = "ALSM")
+data("CH18TA02", package = "ALSM")
+data("CH18TA05", package = "ALSM")
+data("CH18TA07", package = "ALSM")
+```
+
+
+
+Input Rust Inhibitor Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH17TA02
+names(.data) <- c("y", "x1", "x2")
+fit <- lm(y ~ factor(x1)-1, .data)
+```
+
+
+TABLE 18.1     (p 777)
+----------------------------------------------------------------------------
+
+#### Residuals--Rust Inhibitor Example
+
+```{r}
+xtabs(resid(fit) ~ x2 + x1, .data)
+```
+
+
+FIGURE 18.1     (p 777)
+----------------------------------------------------------------------------
+
+#### Diagnostic Residual Plot--Rust Inhibitor Example
+
+```{r}
+plot(resid(fit) ~ fitted(fit), ylab = "Residual", xlab = expression(hat(Y)), pch = 19)
+abline(0,0)
+title(expression(paste("(a) Residual against ", hat(Y))))
+
+stripchart(split(resid(fit), .data$x1), method = "stack",  pch = 19)
+abline(h = seq(2, 4)-0.1)
+title("(b) Aligned Residual Dot Plot")
+
+qqnorm(resid(fit), xlab = "Exp Val", ylab = "Residual", pch = 19, main = "")
+qqline(resid(fit))
+title("(c) Normal Probability Plot")
+```
+
+
+FIGURE 18.2 - 18.5
+----------------------------------------------------------------------------
+
+Omitted; No data
+
+
+
+
+Input ABT Electronics Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH18TA02
+names(.data) <- c("y", "x1", "x2")
+```
+
+
+TABLE 18.2     (p 783)
+----------------------------------------------------------------------------
+
+#### Solder Joint Pull Strength--ABT Electronics Example
+
+R has a function for the H distribution used in this example. It comes from `maxFratio` (*SuppDists*). The df and r (k) are reversed in its arguments from those used in the book. Note that (18.10) just is the variance (var) function applied to each factor level, as used below.
+
+```{r fratio, message=FALSE}
+tab <- xtabs(y ~ x2 + x1, .data)
+round(addmargins(tab, 1, FUN = list(list(mean, median, s = var))), 3)
+
+vars <- with(.data, tapply(y, x1, var))  # (18.10)
+cat("H* = ", max(vars) / min(vars))   # (18.8)
+qmaxFratio(0.95, 7, 5)                # (18.9)
+```
+
+
+
+FIGURE 18.6     (p 784)
+----------------------------------------------------------------------------
+
+#### Dot Plots of Pull Strengths--ABT Electronics Example
+
+We round the `y` values so they actually stack at integer points. Otherwise, they're recognized as different numeric values and do not stack as desired. 
+
+```{r}
+stripchart(round(y) ~ x1, .data, pch = 19, method = "stack", xlim = c(0, 30), xlab = "Pull Strength", ylab = "Type")
+abline(h = seq(2,5) - 0.1)
+```
+
+
+TABLE 18.3     (p 785)
+----------------------------------------------------------------------------
+
+#### Absolute Deviations of Responses from Treatment Medians--ABT Electronics Example
+
+R does contain a function for the Brown-Forsythe test called `hov` (*HH*). Since this test is not nearly as simple as the Hartley test, which is one of its prime advantages, making use of `hov` is a time saver. The `BF` computations serve no pedagogical value at this time, so they will be omitted.
+
+```{r, message=FALSE}
+hov(y ~ factor(x1), .data)
+data.frame(with(.data, tapply(y, x1, function(x) list(abs(x - median(x))))))
+```
+
+
+FIGURE 18.7 and TABLE 18.4    (p 788)
+----------------------------------------------------------------------------
+
+#### Weighted Regression Output for Full and reduced Models--ABT Electronics Example
+#### Data for Weighted Least Squares Regression--ABT Electronics Example
+
+```{r}
+w = 1 / vars          # Factor level variances (18.10) defined earlier
+w = rep(w, each = 8)  # (18.14) -- Repeat each weight by # of x2 factor levels
+fit <- lm(y ~ x1 -1, transform(.data, x1 = factor(x1)), weights = w)  # (18.17)
+
+data.frame(
+  'i' = .data$x1,
+  'j' = .data$x2,
+  'Y' = .data$y,
+  model.matrix(fit),
+  'Weights' = w,
+  'Reduced.Model' = 1)
+
+summary(fit)
+anova(fit)
+summary(lm(y ~ 1, .data, weights = w))  # Reduced Model (18.19)
+anova(lm(y ~ 1, .data, weights = w))
+anova(lm(y ~ 1, .data, weights = w), fit)  # Confirm that x1 is significant to keep
+```
+
+
+
+
+Input the Servo Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH18TA05
+names(.data) <- c("y", "x1", "x2")
+```
+
+
+
+TABLE 18.5     (p 791)
+----------------------------------------------------------------------------
+
+#### Time between Computer Failures at Three Locations (in hours)--Servo-Data Example
+
+```{r}
+addmargins(xtabs(y ~ x2 + x1, .data), 1, list(list(mean, var)))
+addmargins(xtabs(rank(y) ~ x2 + x1, .data), 1, list(list(mean, var)))
+
+cbind(
+  '(1)' = with(.data, tapply(y, x1, function(x) var(x) / mean(x))),
+  '(2)' = with(.data, tapply(y, x1, function(x) sd(x)  / mean(x))),
+  '(3)' = with(.data, tapply(y, x1, function(x) sd(x)  / mean(x)^2)))
+```
+
+
+TABLE 18.6 and FIGURE 18.8    (p 792)
+----------------------------------------------------------------------------
+
+#### Normal Probability Plots for Original and Transformed Data--Servo-data Example
+
+See `Chapter 3` for details on manual calculations. Instead, `boxcox` (*MASS*) will be used.
+
+We do not show the Bonferroni corrected confidence intervals. Instead, we're just going to see if there exists any pairwise differences. To this end `pairwise.t.test` with the `p.adj = 'bonf'` parameter set will suffice. It produces a pairwise matrix of p-values. In this case, "3-2" has a p-value of 5% indicating their is a statistically significant difference between the two means. We also provide a TukeyHSD result for comparison. Review the methods to check this appropriateness. 
+
+```{r boxcox, message=FALSE}
+fit <- lm(y ~ factor(x1) - 1, .data)
+boxcox(fit)
+```
+
+```{r prob-plots, fig.width=12, fig.height=6}
+with(.data, tapply(log(y), x1, var))   # More stable variances (p 792)
+with(.data, tapply(log(y), x1, mean))  # Transformed means (p 793)
+
+par(mfrow = c(1, 2), pch = 16)
+qqnorm(resid(fit), xlab = "Expected Value", ylab = "Residual", main = "")
+qqline(resid(fit))
+title("(a) Original Data")
+
+fit <- update(fit, log(.) ~ .)
+qqnorm(resid(fit), xlab = "Expected Value", ylab = "Residual", main = "")
+qqline(resid(fit))
+title("(b) Transformed Data")
+
+  ## Some statistics (p 793)
+anova(lm(log(y) ~ 1, .data), fit)  # anova(reduced, full)
+qf(0.90, 2, 12)                 # Compare with above F*
+summary(fit)                    # Authors typo mean(location2) = 2.792
+with(.data, pairwise.t.test(log(y), x1, p.adj = "bonf", conf.level = 0.9))
+TukeyHSD(aov(log(y) ~ factor(x1), .data), conf.level = 0.90)
+```
+
+
+EXAMPLE     (p 795-8)
+----------------------------------------------------------------------------
+
+#### Nonparametric Rank F Test and Multiple Pairwise Testing Procedure--Servo-Data Example
+
+We provide the F-value in the ANOVA output for this nonparametric ranked response model. Per the author's comment (p 796), we also include the Kruskal-Wallis test using `kruskal.test` (*stats*). The results are very close in both cases. We manually calculate the multiple pairwise comparisons. 
+
+```{r}
+fit <- lm(rank(y) ~ factor(x1), .data)
+addmargins(xtabs(rank(y) ~ x2 + x1, .data), 1, list(list(mean, var)))  # Same results as earlier
+anova(fit)  # Compare F-value with value below
+cat("F* =", qf(0.90, 2, 12))
+kruskal.test(y ~ x1, .data)  # Compare the chi-squared value with value below
+cat("chi* =", qchisq(0.90, 2))
+
+
+# Multiple Pairwise Comparisons
+B = qnorm(1 - 0.1 / 6) * sqrt((15 * (15 + 1)) / 12 * (1/5 + 1/5))
+m = with(.data, tapply(rank(y), x1, mean))
+round(rbind(
+  "1-2" = c('diff' = m[[1]] - m[[2]], (m[1] - m[2]) + c('lwr' = -B, 'upr' =  B)),
+  "3-2" = c('diff' = m[[3]] - m[[2]], (m[3] - m[2]) + c('lwr' = -B, 'upr' =  B)),
+  "3-1" = c('diff' = m[[3]] - m[[1]], (m[3] - m[1]) + c('lwr' = -B, 'upr' =  B))), 1)
+```
+
+
+
+Input Heart Transplant Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH18TA07
+names(.data) <-  c("y", "x")
+.data <- transform(.data, x = factor(x, labels = c("Low", "Medium", "High")))
+```
+
+
+TABLE 18.7     (p 798)
+----------------------------------------------------------------------------
+
+#### Survival Times of Patients Following Heart Transplant Surgery--Heart Transplant Example
+
+Since the number of observations per treatment vary, we cannot present this in tabular form in R. Instead, we simply split them and show the separate treatment vectors of the response. 
+
+```{r}
+with(.data, split(y, x))
+```
+
+
+FIGURE 18.9     (p 799)
+----------------------------------------------------------------------------
+
+#### Diagnostic Plots--Heart Transplant Example
+
+```{r diag-plot, message=FALSE}
+fit <- lm(y ~ x - 1, .data)
+
+stripchart(y ~ x, .data, method = "jitter", pch = 19, xlab = "Survival Time")
+title("(a) Dot Plots of Survival Times")
+
+stripchart(rstudent(fit) ~ x, .data, method = "jitter", pch = 19, xlab = "Studentized Residual")
+title("(b) Dot Plots of Studentized Residuals")
+  
+qqnorm(rstudent(fit), pch = 19, xlab = "Expected Value", ylab = "Studentized Residual", main = "")
+qqline(rstudent(fit))
+title("(c) Normal Probability Plot\n of Studentized Residuals")
+
+hov(y ~ x, .data)  # (p 799) test for constancy of variance
+boxcox(fit)
+```
+
+
+FIGURE 18.10     (p 800)
+----------------------------------------------------------------------------
+
+#### Diagnostic Plots and ANOVA Table for Transformed Data--Heart Transplant Example
+
+```{r}
+fit <- lm(log(y) ~ x, .data)
+summary(fit)
+
+stripchart(rstudent(fit) ~ x, .data, method = "jitter", pch = 19, xlab = "Studentized Residual")
+title("(a) Dot Plots of Studentized Residuals")
+  
+qqnorm(rstudent(fit), pch = 19, xlab = "Expected Value", ylab = "Studentized Residual", main = "")
+qqline(rstudent(fit))
+title("(b) Normal Probability Plot\n of Studentized Residuals")
+```

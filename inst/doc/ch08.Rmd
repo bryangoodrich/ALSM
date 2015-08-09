@@ -1,0 +1,358 @@
+---
+title: "Chapter 8 Regression Models for Quantitative and Qualitative Predictors"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 8}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 8 -- Regression Models for Quantitative and Qualitative Predictors
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+library(car)    # Used by alr3
+library(alr3)   # pureErrorAnova
+library(Rcmdr)  # scatter3d
+
+data("CH08TA01", package = "ALSM")
+data("CH07TA01", package = "ALSM")
+data("CH08TA02", package = "ALSM")
+data("CH08TA05", package = "ALSM")
+```
+
+
+Input the Power Cells Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH08TA01
+names(.data) <- c("Y", "X1", "X2")
+.data <- transform(.data, 
+  x1   = scale(X1, scale = 0.4),
+  x2   = scale(X2, scale = 10),
+  x1sq = scale(X1, scale = 0.4)^2,
+  x2sq = scale(X2, scale = 10)^2,
+  x1x2 = scale(X1,, 0.4) * scale(X2,, 10))
+
+fit <- lm(Y ~ ., .data)
+```
+
+
+Table 8.1     (p 300)
+----------------------------------------------------------------------------
+#### Data--Power Cells Example
+
+```{r}
+model.frame(.data)
+```
+
+
+FIGURE 8.5     (p 303)
+----------------------------------------------------------------------------
+#### Diagnostic Residual Plots--Power Cells Example
+
+```{r}
+par(mfrow = c(2, 2), pch = 19)
+plot(resid(fit) ~ fitted(fit), xlab = "Fitted", ylab = "Residual")
+title("(a) Residual Plot Against Fitted Values")
+
+plot(resid(fit) ~ x1, .data, xlab = "x1", ylab = "Residual")
+title("(b) Residual Plot against x1")
+
+plot(resid(fit) ~ x2, .data, xlab = "x2", ylab = "Residual")
+title("(c) Residual Plot against x2")
+
+qqnorm(resid(fit), xlab = "Expected", ylab = "Residual", main = "")
+qqline(resid(fit))
+title("(d) Normal Probability Plot")
+```
+
+
+FIGURE 8.4     (p 301-5)
+----------------------------------------------------------------------------
+#### Regression Output for Second-Order Polynomial Model--Power Cells Example
+
+A lot of analysis was performed over these pages, both shown and not shown. For that reason I will follow a similar process. However, results that can be easily obtained by summary functions will be ignored. The F-test that is performed is not that in the summary results (either here or in the SAS output the authors provide). The summary results show the F-test as to whether or not all the predictor variables are relevant. This statistic is `10.57`, which is still less than the 19.2. Recall from Chapter 3 that the *alr3* library contains `pureErrorAnova` for an extended ANOVA table.
+
+```{r poly-out, message=FALSE}
+fit <- lm(Y ~ ., .data)                                 # Restate the model
+summary(fit)
+pureErrorAnova(fit)                                     # alr3 function
+anova(lm(Y ~ 1, .data), fit)                            # Explicit F-Test
+
+
+# Calculate F*     (p 302)
+pureErrorAnova(fit)[" Lack of fit", "Mean Sq"] / pureErrorAnova(fit)[" Pure Error",  "Mean Sq"]  # (6.68b)
+
+# Correlation (p 301)
+with(.data, rbind(
+  "X and Xsq" = round(c("1" = cor(X1, X1^2), "2" = cor(X2, X2^2)), 3),
+  "x and xsq" = round(c("1" = cor(x1, x1^2), "2" = cor(x2, x2^2)), 3)))
+
+anova(lm(Y ~ x1 + x2, .data), fit)                      # partial F-test
+fit <- lm(Y ~ x1 + x2, .data)                           # refit model (p 304)
+
+# Diagnostic Plots
+par(mfrow = c(2, 2), pch = 19)                       # Same as FIGURE 8.5
+plot(resid(fit) ~ fitted(fit), xlab = "Fitted", ylab = "Residual")
+title("(a) Residual Plot Against Fitted Values")
+
+plot(resid(fit) ~ x1, .data, xlab = "x1", ylab = "Residual")
+title("(b) Residual Plot against x1")
+
+plot(resid(fit) ~ x2, .data, xlab = "x2", ylab = "Residual")
+title("(c) Residual Plot against x2")
+
+qqnorm(resid(fit), xlab = "Expected", ylab = "Residual", main = "")
+title("(d) Normal Probability Plot")
+qqline(resid(fit))
+
+confint(lm(Y ~ X1 + X2, .data))                         # Bonferroni procedure on original coefs. (p 305)
+```
+
+
+FIGURE 8.6     (p 304)
+----------------------------------------------------------------------------
+#### Plot of Fitted Response Plane--Power Cells Example
+
+Here we make use of the function I defined in chapter 6 for `FIGURE 6.7`. 
+
+```{r}
+lm3d <- function(model, res, ...) {
+  ivs <- labels(terms(model))
+  x <- model.frame(model)[, ivs[1]]     # 1st independent variable
+  y <- model.frame(model)[, ivs[2]]     # 2nd independent variable  
+  xr <- seq(min(x), max(x), len = res)  # equidistant sequence from range of 1st iv
+  yr <- seq(min(y), max(y), len = res)  # equidistant sequence from range of 2nd iv
+  
+  # Create a list object of these sequences to be turned into a grid
+  newdata <- list(xr, yr)
+  names(newdata) <- ivs
+  newdata <- do.call('expand.grid', newdata)
+  
+  zr <- matrix(predict(model, newdata), res, res)
+  persp(xr, yr, zr, ...)
+}
+
+lm3d(lm(Y ~ X1 + X2, .data), res = 30, ticktype = "detailed", shade = 0.5, expand = 2/3,
+     xlab = "Charge Rate", ylab = "Temp", zlab = "Cycles",
+     theta = 320, phi = 30)
+```
+
+
+Input the Body Fat Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH07TA01
+names(.data) <- c("X1", "X2", "X3", "Y")
+
+# Add centered variables
+.data <- transform(.data,
+  x1 = scale(X1, T, F),
+  x2 = scale(X2, T, F), 
+  x3 = scale(X3, T, F))
+
+fit <- lm(Y ~ (X1 + X2 + X3)^2, .data)
+```
+
+
+Implementation of Interaction Regression Models                   (p 312-3)
+----------------------------------------------------------------------------
+#### Body Fat Example
+
+```{r}
+cor(model.matrix(fit)[, -1])         # Interactions, high correlation (p 312)
+
+fit <- lm(Y ~ (x1 + x2 + x3)^2, .data)  # fit centered values instead
+cor(model.matrix(fit)[, -1])         # less correlation, but still present
+summary(fit)
+anova(fit)
+anova(lm(Y ~ x1 + x2 + x3, .data), fit) # partial F-test: F = 0.53 < qf(.95, 3,13)
+```
+
+
+Input the Insurance Innovation Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH08TA02
+names(.data) <- c("Y", "X1", "X2")
+.data <- transform(.data, X2 = factor(X2, labels = c("Mutual", "Stock")))
+fit <- lm(Y ~ X1 + X2, .data)
+```
+
+
+FIGURE 8.11     (p 316)
+----------------------------------------------------------------------------
+#### Plot of Y against X1 at both levels of indicator variable--Insurance Innovation Example
+
+When using `abline` on a fitted model, it is really just supplying the slope and intercept coefficients to the relevant parameters. We can use this fact to adjust those parameters for the two situations. In particular, the default parameters to `abline` are of the form
+
+> `abline(intercept, slope)`
+
+Under a qualitative predictor, when it is not the reference level, we see that coefficient addition to the intercept term. This is what we mimic below given how `abline` works. 
+
+```{r}
+plot(Y ~ X1, .data, pch = 19, ylim = c(0, 40), xlim = c(0, 310),
+     xlab = "Size of Firm", ylab = "Months Elapsed")
+
+abline(coef(fit)[[1]], coef(fit)[[2]],)  # Mutual Firm
+abline(coef(fit)[[1]] + coef(fit)[[3]], coef(fit)[[2]], col = "red")  # Stock  Firm
+```
+
+
+TABLE 8.2     (p 317)
+----------------------------------------------------------------------------
+#### Data and Indicator Coding--Insurance Innovation Example
+
+If you simply tried to `cbind` a factor value, it will return the way R stores it as 1 and 2. There are 2 approaches used below to access the information we want. First, we can use the `model.matrix` for the fitted model. This returns the `X` matrix used in the linear model which contains the binary encoding for a dummy variable (multiple columns for multiple category predictor). The other approach is to realize that if you remove the class (`unclass`) from that variable, it returns as the storage 1 and 2 values, numerically. We can then offset that by 1 to get a binary encoding as desired. This is performed below to obtain the interaction terms. 
+
+```{r}
+data.frame(
+    "Months"      = .data$Y,
+    "Firm Size"   = .data$X1,
+    "Firm Type"   = .data$X2,
+    "Indicator"   = model.matrix(fit)[, 3],
+    "Interaction" = .data$X1 * (unclass(.data$X2) - 1)
+)
+```
+
+
+TABLE 8.3     (p 317)
+----------------------------------------------------------------------------
+#### Regression Results for Fit of Regression Model (8.33)--Insurance Innovation Example
+
+Also included are the results for the confidence intervals of the parameters. The formal test is inherent in `summary` as the p-values and printed stars demonstrate these coeffficients are significant at an `alpha = 0.01` level. This is confirmed by the respective confidence interval not including zero.
+
+```{r}
+summary(fit)
+anova(fit)
+confint(fit)
+```
+
+
+
+FIGURE 8.12     (p 318)
+----------------------------------------------------------------------------
+#### Fitted Regression Function for Regression Model (8.33)--Insurance Innovation Example
+
+```{r}
+fit <- lm(Y ~ X1 + X2, .data)
+plot(Y ~ X1, .data, col = X2, pch = 19, ylim = c(0, 40), xlim = c(0, 310),
+     xlab = "Size of Firm", ylab = "Months Elapsed")
+abline(coef(fit)[[1]], coef(fit)[[2]])  # Mutual Firm
+abline(coef(fit)[[1]] + coef(fit)[[3]],  coef(fit)[[2]], col = "red")  # Stock  Firm
+```
+
+
+FIGURE 8.14 and FIGURE 8.15     (p 325)
+----------------------------------------------------------------------------
+#### Plot of Y against X1 at both levels of indicator variable--Insurance Innovation Example
+
+Note that the author does an illustration that exaggerates the change in slope. As is evidenced from this example, the slope is relatively unchanged so that the two lines appear parallel. The difference between the two is the coefficient `X1X2 = -0.000417`
+
+Here I set a new model that nests the `X2` levels. By excluding the intercept term, the coefficients 1 and 3 apply to the first `X2` level (mutual firm) and the coefficients 2 and 4 apply to the second `X2` level (stock firm).
+```{r}
+fit <- lm(Y ~ X2/X1 - 1, .data)  # Using nested model for ease of presentation
+plot(Y ~ X1, .data, col = X2, pch = 19, ylim = c(0, 40), xlim = c(0, 310),
+     xlab = "Size of Firm", ylab = "Months Elapsed")
+abline(coef(fit)[[1]], coef(fit)[[3]])               # Mutual Firm
+abline(coef(fit)[[2]], coef(fit)[[4]], col = "red")  # Stock  Firm
+```
+
+
+TABLE 8.4     (p 327)
+----------------------------------------------------------------------------
+#### Regression Results for Fit of Regression Model (8.49) with Interaction Term--Insurance Innovation Example
+
+```{r}
+fit <- lm(Y ~ X1 * X2, .data)  # Going back to intended model
+summary(fit)
+anova(fit)
+anova(lm(Y ~ X1 + X2, .data), fit)
+```
+
+
+Input the Soap Production Lines Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH08TA05
+names(.data) <- c("Y", "X1", "X2")
+.data <- transform(.data, X2 = factor(X2, labels = c("Line1", "Line2")))
+```
+
+
+TABLE 8.5     (p 330)
+----------------------------------------------------------------------------
+#### Data--Soap Production Lines Example
+
+```{r}
+data.frame(
+  "Scrap"      = .data$Y,
+  "Line_Speed" = .data$X1,
+  "Indicator"  = .data$X2)
+```
+
+
+
+FIGURE 8.16     (p 331)
+----------------------------------------------------------------------------
+#### Symbolic Scatter Plot--Soap Production Lines Example
+
+```{r}
+fit <- lm(Y ~ X2/X1 - 1, .data)  # Using nested model for ease of presentation
+plot(Y ~ X1, .data, col = X2, ylim = c(100, 500), xlim = c(100, 350), pch = 19,
+     xlab = "Line Speed", ylab = "Amount of Scrap")
+abline(coef(fit)[[1]], coef(fit)[[3]])               # Production Line 1
+abline(coef(fit)[[2]], coef(fit)[[4]], col = "red")  # Production Line 2
+```
+
+
+FIGURE 8.17     (p 332)
+----------------------------------------------------------------------------
+#### Residual Plots against Yhat--Soap Production Lines Example
+
+The author mentions a residual plot against X2 and a normal probability plot (page 331), but did not include them. I have included them below. Note that 'fit' is still referring to the fitted model, but the results are the same as `lm(Y ~ X1*X2, .data)`. 
+
+```{r}
+plot(fitted(fit), resid(fit), col = .data$X2, pch = 19,
+     xlim = c(100, 500), ylim = c(-40,40),
+     ylab = "Residual", xlab = "Fitted")
+title("(a) Production Line 1")
+abline(0, 0)
+
+plot(jitter(as.numeric(.data$X2), 0.1), resid(fit), pch = 19, 
+     xlab = "Production Line", ylab = "Residual", sub = "jittered added to X2")
+
+qqnorm(resid(fit), xlab = "Expected", ylab = "Residual", main = "")
+qqline(resid(fit))
+title("Normal Probability Plot")
+```
+
+
+TABLE 8.6     (p 332)
+----------------------------------------------------------------------------
+#### Regression Results for Fit of Regression Model (8.55)--Soap Production Lines Example
+
+```{r}
+fit <- lm(Y ~ X1 * X2, .data)  # No longer using the nested model
+summary(fit)
+anova(fit)
+```

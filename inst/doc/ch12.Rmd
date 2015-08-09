@@ -1,0 +1,296 @@
+---
+title: "Chapter 12 Autocorrelation in Time Series Data"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 12}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 12 -- Autocorrelation in Time Series Data
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+library(lmtest)
+
+data("CH12TA02", package = "ALSM")
+```
+
+
+TABLE 12.1 and FIGURE 12.1     (p 482-3)
+----------------------------------------------------------------------------
+#### Example of Positively Autocorrelated Error Terms
+
+Since this data is entirely constructed I will define a function that will build the true regression output and the error terms given a set of distrubances (u). It will print out the error terms against time (Xt) while accepting additional plotting parameters.
+
+Note that the interested reader could try other disturbances from the standard normal distribution by using rnorm, which defaults to mean = 0 and sd = 1. Depending on the size required, the function will build a dataframe of that size.
+
+```{r}
+error <- function(u, estart = 3.0, plot = FALSE, ...)
+{
+  e  <- vector(mode = "numeric", length = length(u))  
+  y  <- vector(mode = "numeric", length = length(u))
+  Xt <- 0:10
+
+  for(i in seq(u)) 
+    if (i != 1) e[i] <- e[i-1] + u[i] else e[i] <- estart
+  
+  y <- 2 + 0.5 * Xt + e  # Define the response from systematic Xt and error term u
+
+  if (plot) 
+    plot(e, pch = 19, ...)
+
+  return(data.frame(u = u, e = e, y = y, x = 0:10))
+}
+ 
+u <- c(0, 0.5, -0.7, 0.3, 0, -2.3, -1.9, 0.2, -0.3, 0.2, -0.1)
+.data <- error(u, xlab = "Time", plot = TRUE, ylim = c(-3, 4))
+abline(0, 0)
+print(.data)
+```
+
+
+
+FIGURE 12.2     (p 483)
+----------------------------------------------------------------------------
+#### Regression with Positively Autocorrelated Error Terms
+
+Since (c) uses "different disturbances" the results will differ each time.
+
+```{r}
+plot(y ~ x, .data, ylim = c(0, 10), main = "(a) True Regression Line e0 = 3", pch = 19)
+abline(2, 0.5)
+
+plot(y ~ x, .data, ylim = c(0, 10), main = "(b) Fitted Regression Line e0 = 3", pch = 19)
+abline(lm(y ~ x, .data))
+
+# Create new data set
+.data <- error(rnorm(11), estart = -0.2)
+plot(y ~ x, .data, ylim = c(0, 10), main = "(c) Fitted Regression Line e0 = -0.2", pch = 19)
+abline(lm(y ~ x, .data))
+```
+
+
+
+Input the Blaisdell Company Data
+----------------------------------------------------------------------------
+
+Since R has extensive facilities for dealing with time series data, I will convert the data to a time series (ts) object with the appropriate time interval. For more see the Vito Ricci's reference card
+
+> http://cran.r-project.org/doc/contrib/Ricci-refcard-ts.pdf
+
+It will be noted now that throughout the rest of this chapter there are two references to many of the terms, either by t or t-1. Since R is inherently vectorized and each of these vectors include n-1 terms from the n-sized vector, we can unambiguously define `t = 2:20` and `t-1 = 1:19` by the vectorized arithmetic. This will make a lot of the notation clearer.
+
+```{r}
+.data <- CH12TA02
+names(.data) <- c("Y", "X")
+fit  <- lm(Y ~ X, .data)
+t    <- seq(2, 20)
+```
+
+
+
+FIGURE 12.3     (p 489)
+----------------------------------------------------------------------------
+#### Residuals Plotted against Time--Blaisdell Company Example
+
+```{r}
+plot(resid(fit), xlab = "Time", ylim = c(-0.5, .5), pch = 19)
+abline(0,0)
+```
+
+
+TABLE 12.2     (p 489)
+----------------------------------------------------------------------------
+#### Data, Regression Results, and Durbin-Watson Test Calculations--Blaisdell Company Example (Company and Industry Sales Data Are Seasonally Adjusted)
+
+R contains a Durban-Watson test `dwtest` (*lmtest*). See below. It is possible to cbind the table and the data object, but it would be superfluous. I then calculate D which can be checked against `Table B.7` for `n = 20`, `alpha = 0.1`, and `p = 2`. The test conclusion is the same as `dwtest`.
+
+```{r dwtest, message=FALSE}
+tab <- as.table(cbind(
+  '(1)' = .data$Y,
+  '(2)' = .data$X,
+  '(3)' = resid(fit),
+  '(4)' = c(NA,  resid(fit)[t] - resid(fit)[t-1]),
+  '(5)' = c(NA, (resid(fit)[t] - resid(fit)[t-1])^2),
+  '(6)' = resid(fit)^2))
+
+round(tab, 4)
+
+tab <- (resid(fit)[t] - resid(fit)[t-1])^2 / 
+        sum(resid(fit)^2)
+sum(tab)  # D = 0.735 (p 488)
+
+dwtest(fit)  # alternative hypotheses defaults to rho > 0
+
+fit.ordinary <- fit  # Save for end of chapter
+```
+
+
+TABLE 12.3     (p 493)
+----------------------------------------------------------------------------
+#### Calculations for Estimating p with the Cochrane-Orcutt Procedure--Blaisdell Company Example
+
+```{r}
+# An NA value is prefixed to each vector to fill out the t+1 = n observations
+as.table(cbind(
+  '(1)' = resid(fit),
+  '(2)' = c(NA, resid(fit)[t-1]),
+  '(3)' = c(NA, resid(fit)[t-1] * resid(fit)[t]),
+  '(4)' = c(NA, resid(fit)[t-1]^2))) 
+
+c("rho" = sum(resid(fit)[t-1] * resid(fit)[t]) / sum(resid(fit)[t-1]^2))
+```
+
+
+TABLE 12.4     (p 493)
+----------------------------------------------------------------------------
+#### Transformed Variables and Regression Results for First Iteration with Cochrane-Orcutt Procedure--Blaisdell Company Example
+
+```{r cochrane-orcutt, message=FALSE}
+cochrane.orcutt <- function(model) 
+{
+  x      <- model.matrix(model)[, -1]
+  y      <- model.response(model.frame(model))
+  e      <- resid(model)
+  n      <- length(e)
+  t      <- 2:n
+  r      <- sum(e[t-1] * e[t]) / sum(e[t-1]^2)     # (12.22)    Step 1
+  y      <- y[t] - r * y[t-1]                      # (12.18a)
+  x      <- x[t] - r * x[t-1]                      # (12.18b)
+  model  <- lm(y ~ x)                              # (12.19)    Step 2
+  model$rho <- r
+  return(model)
+}
+
+fit <- lm(Y ~ X, .data)
+fit <- cochrane.orcutt(fit)
+cbind(.data, 
+      rbind(NA, model.frame(fit)))
+
+# Generated in function above and stored with model to be used below.
+c('rho' = fit$rho)  
+summary(fit)
+anova(fit)
+
+# Durbin-Watson test on Cochrane-Orcutt model after 1 iteration
+dwtest(fit)  # DW = 1.6502, fail to reject H0
+
+# (12.23) Convert transformed coefficients back to original
+cat("Y = ", coef(fit)[1] / (1 - fit$rho), " + ", coef(fit)[2], "X\n", sep = "")
+
+fit.cochrane <- fit  # Save for end of chapter
+```
+
+
+
+TABLE 12.5     (p 495)
+----------------------------------------------------------------------------
+#### Hildreth-Lu Results--Blaisdell Company Example
+
+```{r}
+rho <- c(0.1, 0.3, 0.5, 0.7, 0.9, 0.92, 0.94, 0.95, 0.96, 0.97, 0.98)
+
+hildreth.lu <- function(rho, model)
+{
+  x <- model.matrix(model)[, -1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t] - rho * y[t-1]
+  x <- x[t] - rho * x[t-1]
+  
+  return(lm(y ~ x))
+}
+
+fit <- lm(Y ~ X, .data)
+
+# Minimum SSE = 0.07167118 for rho = 0.96. See plot below.
+tab <- data.frame('rho' = rho, 
+             'SSE' = sapply(rho, function(r) {deviance(hildreth.lu(r, fit))}))
+round(tab, 4)
+
+plot(SSE ~ rho, tab, type = 'l')
+abline(v = tab[tab$SSE == min(tab$SSE), 'rho'], lty = 3)
+
+fit <- hildreth.lu(0.96, fit)
+summary(fit)
+dwtest(fit)
+
+# (12.28) Convert transformed coefficients back to original
+cat("Y = ", coef(fit)[1] / (1 - 0.96), " + ",  coef(fit)[2], "X", sep = "")
+
+fit.hildreth <- fit  # Save for end of chapter
+```
+
+
+TABLE 12.6     (p 497)
+----------------------------------------------------------------------------
+#### First Differences and Regression Results with First Differences Procedure--Blaisdell Company Example
+
+```{r}
+# One could also just do lm(diff(Y) ~ 0 + diff(X), .data), but the coefficients would be oddly named diff(X).
+fit <- lm(y ~ x - 1, data.frame(y = diff(.data$Y), x = diff(.data$X)))
+
+cbind(
+  '(1)' = .data$Y, 
+  '(2)' = .data$X, 
+  '(3)' = c(NA, diff(.data$Y)),
+  '(4)' = c(NA, diff(.data$X))) 
+
+summary(fit)
+anova(fit)
+dwtest(fit)
+
+# (12.33) Convert transformed coefficient back to original
+cat("Y = ", mean(.data$Y) - coef(fit)*mean(.data$X), " + ", coef(fit), "X\n", sep = "")
+
+fit.difference <- fit  # Save for end of chapter
+```
+
+
+
+TABLE 12.7                                                          (p 498)
+----------------------------------------------------------------------------
+#### Major Regression Results for Three Transformation Procedures--Blaisdell Company Example
+
+This table will be ignored for lack of pedagogical value. The procedures have already been discussed, and it would be a tedious exercise to build the nice summary table as it is displayed. Instead, the various models have bee saved up to this point for any exploration required, save for the rho values, which are either implicit or explored during those sections. Below I show just a simple approach to obtaining some of that information. I leave the MSE column for the interested reader to figure out. 
+
+```{r}
+# First column of slope coefficients
+c('Cochrane'   = c(coef(fit.cochrane)[2]),
+  'Hildreth'   = c(coef(fit.hildreth)[2]), 
+  'Difference' = c(coef(fit.difference)), 
+  'Ordinary'   = c(coef(fit.ordinary)[2]))
+
+# Second column of sloope coefficient standard errors
+c('Cochrane'   = round(summary(fit.cochrane)[['coefficients']][2, 2], 4),
+  'Hildreth'   = round(summary(fit.hildreth)[['coefficients']][2, 2], 4),
+  'Difference' = round(summary(fit.difference)[['coefficients']][1, 2], 4),
+  'Ordinary'   = round(summary(fit.ordinary)[['coefficients']][2, 2], 4))
+```
+
+
+
+FORECAST EXAMPLE                                                  (p 500-1)
+----------------------------------------------------------------------------
+This forecast was manually calculated from the Cochrane-Orcutt modified (but not transformed) regression model. The steps lack pedagogical value for using R since we're just using it as a calculator in that case.                                                                              
+
+This chapter was a very brief introduction to time series analysis with R. I suggest looking at Robert H. Shumway and David S. Stoffer, *Time Series Analysis and Its Applicatioins.* For details visit the text website.
+
+> http://www.stat.pitt.edu/stoffer/tsa3/
+

@@ -1,0 +1,354 @@
+---
+title: "Chapter 13 Introduction to Nonlinear Regression and Neural Networks"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 13}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 13 -- Introduction to Nonlinear Regression and Neural Networks
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+library(boot)  # boot
+library(HH)    # hov
+library(nnet)  # nnet
+
+data("CH13TA01", package = "ALSM")
+data("CH13TA04", package = "ALSM")
+data("APPENC09", package = "ALSM")
+
+```
+
+
+
+FIGURE 13.1     (p 512)
+----------------------------------------------------------------------------
+#### Plots of Exponential and Logistic Response Functions
+
+```{r example-plots, fig.width=12, fig.height=6}
+par(mfrow = c(1, 2))
+curve(100 - 50*exp(-2*x), xlim = c(0, 4), ylim = c(50, 100), xlab = "", ylab = "")
+title("(a) Exponential Model (13.8)")
+
+curve(10/(1 + 20*exp(-2*x)), xlim = c(0, 4), ylim = c(0, 10), xlab = "", ylab = "")
+title("(b) Logistic Model (13.10)")
+```
+
+
+
+Input Severely Injured Patients Data
+----------------------------------------------------------------------------
+
+Choice of start values discussed on (p 521).
+
+```{r}
+.data <- CH13TA01
+names(.data) <- c("index", "days")
+fit <- nls(index ~ a * exp(b * days), .data, start = c(a = 56.6646, b = -0.03797))
+```
+
+
+TABLE 13.1     (p 515)
+----------------------------------------------------------------------------
+#### Data--Severely Injured Patients Example
+
+```{r}
+cbind('Patient'           = seq(15),
+      'Days Hospitalized' = .data$days,
+      'Prognostic Index'  = .data$index)
+```
+
+
+
+FIGURE 13.2     (p 515)
+----------------------------------------------------------------------------
+#### Scatter Plot and Fitted Nonlinear Regression Function--Severely Injured Patients Example
+
+
+```{r}
+plot(index ~ days, .data, pch = 19)
+curve(coef(fit)[1] * exp(coef(fit)[2] * x), add = TRUE)
+```
+
+
+TABLE 13.2 and TABLE 13.3     (p 522-4)
+#### Y(0) and D(0) Matrices--Severely Injured Patients Example
+#### Gauss-Newton Method Iterations and Final Nonlinear Least Squares Estimates--Severely Injured Patients Example
+
+Below is a function suited for this example. It outputs part (a) under the list items "Estimate". Under "LS" we have a column of the final chosen 'g' and a column for the MSE and final SSE. In "se" is a reproduction of the matrix for part (c). Included are also the fitted values, which can be matched against `fitted(fit)`, and the Y and D matrices for `TABLE 13.2`. However, these are the final matrices, not the first. The approach here can manually be applied to reproduce `TABLE 13.2` exactly. Note, the standard errors in (b) can be obtained from (c)
+
+```{r}
+nlm <- function(formula, data, g, FUN = function(x, a, b) a * exp(b * x), TOL = 1e-5)
+{
+  YX  <- model.frame(formula, data)
+  x   <- YX[, -1]
+  y   <- YX[, 1]
+  n   <- length(y)
+  SSE <- NULL
+  i   <- 1
+  G   <- matrix(nrow = 50, ncol = 2)
+
+  repeat
+  {
+      G[i, ] = g
+      Y   = as.matrix(y - FUN(x, g[1], g[2]))               # (13.25a)
+      D   = cbind(exp(g[2] * x), g[1] * x * exp(g[2] * x))  # (13.25b)
+      b   = coef(lm(Y ~ D - 1))                             # (13.25c)
+      SSE = c(SSE, sum(Y^2))
+      g <- g + b
+      is.done = ((length(SSE) > 1) && (SSE[i-1] - SSE[i] < TOL))
+      i = i + 1
+      if (is.done) break
+  }
+
+  G <- G[!is.na(G[,1]), ]
+  i = i-1
+  
+  tab <- list()
+  tab$Estimates = cbind('g' = G, 'SSE' = SSE)
+  tab$LS        = cbind(G[i, ], rbind(SSE[i-1] / (n-2), SSE[i-1]))
+  tab$se        = (SSE[i] / (n-2)) * solve(t(D) %*% D)
+  tab$fitted    = G[i, 1] * exp(G[i, 2] * x)
+  tab$Y         = Y
+  tab$D         = D
+  
+  return(tab)
+}
+
+(coefs <- coef(lm(log(index) ~ days, .data)))  # Linear Transform Fit
+(coefs <- c(exp(coefs[1]), coefs[2]))       # Exp. Transformation
+nlm(index ~ days, .data, g = coefs)
+```
+
+
+
+FIGURE 13.3     (p 527)
+----------------------------------------------------------------------------
+#### Diagnostic Residual Plots--Severely Injured Patients Example
+
+Function `hov` (HH) tests for nonconstant error variance with Brown-Forsythe
+
+```{r diag-plots, message=FALSE}
+plot(resid(fit) ~ fitted(fit), xlab = "Fitted Values", ylab = "Residual")
+title("(a) Residual Plot against Fitted")
+abline(0, 0)
+
+qqnorm(resid(fit), xlab = "Expected Value", ylab = "Residual", main = "")
+qqline(resid(fit))
+title("(b) Normal Probability Plot")
+abline(0, 0)
+
+hov(resid(fit) ~ cut(.data$days, 2))  # BF test. P-value = 0.64
+deviance(fit) / df.residual(fit)   # (13.31)
+vcov(fit)                          # (13.32b)
+```
+
+
+FIGURE 13.4     (p 531)
+----------------------------------------------------------------------------
+#### Bootstrap Sampling Distribution--Severely Injured Patients Example
+
+The plotting limits could be reduced so the output looks more like those in the text. Without those limits, these results show highly skewed portions of the bootstrap results.                                                                   
+
+```{r boot, message=FALSE, warning=FALSE}
+boot.coef <- function(data, indices, g)
+{
+  x   <- data[indices, 2]
+  y   <- data[indices, 1]
+  mod <- nls(y ~ a * exp(b*x), .data, start = c(a = g[[1]], b = g[[2]]))
+  
+  return(coef(mod))
+}
+
+# Warnings are produced
+(z <- boot(.data, boot.coef, R = 1000, g = coef(lm(log(index) ~ days, .data))))
+
+# NLS coefficients and Bootstrap CIs
+coef(fit)
+boot.ci(z, index = 1)
+boot.ci(z, index = 2)
+
+
+g0 = expression(g[0]^symbol("\052"))
+g1 = expression(g[1]^symbol("\052"))
+hist(z$t[, 1], 40, freq = FALSE, xlab = g0, main = "")
+title(expression("(a) Histogram of Bootstrap Estimates " * g[0]^symbol("\052")))
+
+hist(z$t[, 2], 40, freq = FALSE, xlab = g1, main = "")
+title(expression("(b) Histogram of Bootstrap Estimates " * g[1]^symbol("\052")))
+
+# Simultaneous Interval Estimation (p 532)
+s = sqrt(diag(vcov(fit)))
+(coef(fit) + 2.16 * c(lwr = -s, upr = s))[c(1,3, 2,4)]
+```
+
+
+
+
+Input Learning Curve Data
+----------------------------------------------------------------------------
+
+It should be noted that *location* is a qualitative factor. However, you cannot use factors in `nls`. However, later when plotting points of different factors, it is a handy utility to treat this variable as a factor when you specify it as the colors for the plot (see `FIGURE 13.5`). In that case, it is explicitly converted to a factor inline. This is also a possible choice when doing any linear model in R. The choice of storing or inline converting between factor and numeric (or character) is up to the analyst and their coding practices.
+
+```{r}
+.data <- CH13TA04
+names(.data) <- c("location", "week", "efficiency")
+```
+
+
+
+TABLE 13.4     (p 534)
+----------------------------------------------------------------------------
+#### Data--Learning Curve Example
+
+The use of `xtabs` lets you see the relative efficiency values of each week by location much more efficiently than merely printing out the long form table. Compare it with `print(.data)`.
+
+```{r}
+xtabs(efficiency ~ week + location, .data)  
+```
+
+
+TABLE 13.5     (p 535)
+----------------------------------------------------------------------------
+#### Nonlinear Least Squares Estimates and Standard Deviations and Bootstrap Results--Learning Curve Example
+
+```{r}
+boot.coef <- function(data, indices, g) 
+{
+  y   <- data[indices, 1]
+  x1  <- data[indices, 2]
+  x2  <- data[indices, 3]
+  mod <- nls(y ~ a  + b*x1 + c*exp(d*x2), start = g)
+  
+  return(coef(mod))
+}
+
+g   <- c(a = 1.025, b = -0.0459, c = -0.5, d = -0.122)
+fit <- nls(efficiency ~ a + b*location + c*exp(d*week), .data, start = g)
+z   <- boot(.data[c(3, 1:2)], boot.coef, R = 1000, g = g)
+
+cbind(
+  'g'   = g,
+  '(1)' = summary(fit)$coef[, 1],
+  '(2)' = summary(fit)$coef[, 2],
+  '(3)' = apply(z$t, 2, mean),
+  '(4)' = apply(z$t, 2, sd)) 
+
+# Residual Plots That Were Not Shown
+par(mfrow = c(2, 2))
+plot(resid(fit) ~ fitted(fit))
+title("Residuals aganist Fitted")
+
+plot(resid(fit) ~ location, .data)
+title("Residuals against Location")
+
+plot(resid(fit) ~ week, .data)
+title("Residuals against Week")
+
+qqnorm(resid(fit), main = "")
+qqline(resid(fit))
+title("Normal Probability Plot")
+```
+
+
+
+FIGURE 13.5     (p 534)
+----------------------------------------------------------------------------
+#### Scatter Plot and Fitted Nonlinear Regression Functions--Learning Curve Example
+
+```{r}
+p <- coef(fit)
+plot(efficiency ~ week, .data, col = factor(location), pch = 19)
+
+curve(p[1] + p[2]*(0) + p[3] * exp(p[4] * x), to = 90, add = T)  # Location = 0
+curve(p[1] + p[2]*(1) + p[3] * exp(p[4] * x), to = 90, add = T)  # Location = 1
+```
+
+
+
+FIGURE 13.6                                                         (p 536)
+----------------------------------------------------------------------------
+#### Histograms of Bootstrap Sampling Distributions--Learning Curve Example
+
+Histograms suffer from showing continuous phenomena by artificially binning them. Included below each histogram is a kernel density plot of the same information, presented as a continuous plot, demonstrating the density distribution of the data. This approach can be modified by altering the kernel density function. See the `density` help files for more details. 
+
+```{r boot-hist, fig.width=12, fig.height=6}
+par(mfcol = c(2,4))
+for(i in seq(4)) {
+  hist(z$t[, i], 50, freq = FALSE, main = "", xlab = paste("g", i, sep = ""))
+  title(paste("(", letters[i], ")", sep = ""))
+  
+  plot(density(z$t[, i]), xlab = paste("g", i, sep = ""), main = "")
+  title(paste("(", letters[i], ")", sep = ""))
+}  
+```
+
+
+
+
+FIGURE 13.7     (p 539)
+----------------------------------------------------------------------------
+#### Various Logistic Activation Functions for Single Predictor
+
+The scale cannot possibly be the same for all lines plotted. When, on this notation, `b = 0.1` the range of x values needs to be around `-50:50` to see `f(x)` values near 0 and 1 as shown in (a).
+
+```{r log-plot, fig.width=12, fig.height=4}
+f <- function(x, a, b) {(1 + exp(-a - b*x))^(-1)}
+
+par(mfrow = c(1, 3), lwd = 2)
+curve(f(x, a =  0, b = 0.1), -10, 10, ylim = c(0, 1))
+curve(f(x, a =  0, b =   1), -10, 10, add = TRUE, lty = 5)
+curve(f(x, a =  0, b =  10), -10, 10, add = TRUE, lty = 3)
+title("(a)")
+
+curve(f(x, a =  0, b = -0.1), -10, 10, ylim = c(0, 1))
+curve(f(x, a =  0, b =   -1), -10, 10, add = TRUE, lty = 5)
+curve(f(x, a =  0, b =  -10), -10, 10, add = TRUE, lty = 3)
+title("(b)")
+
+curve(f(x, a =  5, b = 1), -10, 10, ylim = c(0, 1))
+curve(f(x, a =  0, b = 1), -10, 10, add = TRUE, lty = 5)
+curve(f(x, a = -5, b = 1), -10, 10, add = TRUE, lty = 3)
+title("(c)")
+```
+
+
+
+
+# Input Ischemic Heart Disease (IHD) Data
+----------------------------------------------------------------------------
+
+This section is INCOMPLETE. Neural Networks are still unclear to me at the time of this writing. When I am more educated, this example will be more complete. Until then, I can only offer my apologies!
+
+```{r}
+.data <- APPENC09
+names(.data) <- c("id", "cost", "age", "gender", "intervention", "drugs", 
+               "visits", "complications", "comorbidities", "duration")
+```
+
+
+```{r, results=FALSE, eval=FALSE}
+set.seed(666)
+indices  <- sample(seq(nrow(.data)), 400)
+.data.train <- .data[indices, ]
+.data.test  <- .data[-indices, ]
+fit <- nnet(log(cost) ~ intervention + drugs + comorbidities + complications, .data.train, size = 5, maxit = 50)
+```
+
+

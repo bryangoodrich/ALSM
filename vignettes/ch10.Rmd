@@ -1,0 +1,294 @@
+---
+title: "Chapter 10 Building the Regression Model II"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 10}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 10 -- Building the Regression Model II: Diagnostics
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+library(car)  # avPlots, residualPlots
+
+data("CH10TA01", package = "ALSM")
+data("CH07TA01", package = "ALSM")
+data("CH09TA01", package = "ALSM")
+```
+
+
+Input Life Insurance Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH10TA01
+names(.data) <- c("X1", "X2", "Y")
+fit <- lm(Y ~ ., .data)
+```
+
+
+TABLE 10.1     (p 387)
+----------------------------------------------------------------------------
+#### Basic Data--Life Insurance Example
+
+```{r}
+cbind(
+  "Avg Income"     = .data$X1,
+  "Risk Aversion"  = .data$X2,
+  "Life Insurance" = .data$Y)
+```
+
+
+FIGURE 10.3     (p 387)
+----------------------------------------------------------------------------
+#### Residual Plot and Added-Variable Plot--Life Insurance Example
+
+The *car* package contains `avPlots` for this, among other useful diagnostic functions. See below. At this time, Quick-R contains some examples at
+
+> http://www.statmethods.net/stats/rdiagnostics.html
+
+```{r avplot, fig.height=4, fig.width=7}
+A <- resid(lm(Y ~ X2, .data))
+B <- resid(lm(X1 ~ X2, .data))
+par(mfrow = c(1, 2), pch = 19)
+
+plot(resid(fit) ~ X1, .data, xlab = "X1", ylab = "Residual")
+title("(a) Residual Plot against X1")
+abline(0, 0, lty = 2)
+
+plot(A ~ B, xlab = "e(X1|X2)", ylab = "e(Y|X2)")
+title("(b) Added-Variable Plot for X1")
+abline(lm(A ~ B))
+abline(0, 0, lty = 2)
+```
+
+
+
+
+Input the Body Fat Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH07TA01
+names(.data) <- c("X1", "X2", "X3", "Y")
+fit <- lm(Y ~ X1 + X2, .data)
+```
+
+
+FIGURE 10.4     (p 389)
+----------------------------------------------------------------------------
+#### Residual Plots and Added-Variable Plots--Body Fat Example with Two Predictor Variables
+
+The above manual approach can be extended to this example, but no more pedagogical benefit derives. The reader should be able to match the output to that in the book.
+
+```{r resid-plot, message=FALSE, fig.height=4, fig.width=7}
+avPlots(fit)
+residualPlots(fit, fitted = FALSE, quadratic = FALSE, test = FALSE)
+```
+
+
+TABLE 10.2     (p 393)
+----------------------------------------------------------------------------
+#### Illustration of Hat Matrix
+
+See Chapter 5 tutorial on how to do the matrix algebra. This will all be done using the R utilities. 
+
+Note, you can use `model.matrix(fit)` to obtain the X matrix for calculating the hat matrix and error variance accordingly. For example
+
+> `X %*% solve(t(X) %*% X) %*% t(X)`
+
+```{r}
+fit <- lm(Y ~ X1 + X2, data =
+  data.frame(
+    'Y' = c(301, 327, 246, 187),
+    'X1' = c(14, 19, 12, 11),
+    'X2' = c(25, 32, 22, 15)))
+
+cbind(
+  'X1'   = model.frame(fit)$X1,
+  'X2'   = model.frame(fit)$X2,
+  'Y'    = model.frame(fit)$Y,
+  'Yhat' = fitted(fit), 
+  'e'    = resid(fit),
+  'h'    = hatvalues(fit),
+  's'    = deviance(fit) * (1 - hatvalues(fit)))
+```
+
+
+FIGURE 10.6     (p 398)
+----------------------------------------------------------------------------
+#### Illustration of Leverage Values as Distance Measures--Table 10.2 Example
+
+```{r}
+plot(X2 ~ X1, model.frame(fit), pch = 19, xlim = c(10, 20), ylim = c(10, 37),
+     xlab = "X1", ylab = "X2", main = "FIGURE 10.6")
+text(X2 ~ X1, model.frame(fit), labels = round(hatvalues(fit), 4), pos = 3)
+
+points(mean(X2) ~ mean(X1), model.frame(fit), pch = 22)
+text(mean(X2) ~ mean(X1), model.frame(fit), 
+     cex = 0.75, pos = 4, labels = "(X1bar, X2bar)")
+```
+
+
+TABLE 10.3     (p 397)
+----------------------------------------------------------------------------
+#### Residuals, Diagonal Elements of the Hat Matrix, and Studentized Deleted Residuals--Body Fat Example with Two Predictor Variables
+
+```{r}
+fit <- lm(Y ~ X1 + X2, .data)
+cbind(
+  'e' = round(resid(fit), 3),
+  'h' = round(hatvalues(fit), 3),
+  't' = round(rstudent(fit), 3))
+```
+
+
+FIGURE 10.7     (p 399)
+----------------------------------------------------------------------------
+#### Scatter Plot of Thigh Circumference against Triceps Skinfold Thickness--Body Fat Example with Two Predictor Variables
+
+```{r}
+plot(X2 ~ X1, .data, type = 'n', xlim = c(13, 33), ylim = c(40, 60),
+     xlab = "Triceps Skinfold Thickness", ylab = "Thigh Circumference")
+text(X2 ~ X1, .data, labels = seq(nrow(.data)), cex=.75)
+```
+
+
+TABLE 10.4     (p 402)
+----------------------------------------------------------------------------
+#### DFFITS, Cook's Distances, and DFBETAS--Body Fat Example with Two Predictor Variables
+
+Compare with the R function `influence.measures(fit)`
+
+```{r}
+cbind(
+  "DFFITS"  = round(dffits(fit), 4),
+  "D"       = round(cooks.distance(fit), 4),
+  "DFBETA0" = round(dfbetas(fit)[,1], 4),
+  "DFBETA1" = round(dfbetas(fit)[,2], 4),
+  "DFBETA2" = round(dfbetas(fit)[,3], 4)) 
+```
+
+
+FIGURE 10.8     (p 404)
+----------------------------------------------------------------------------
+#### Proportional Influence Plot (Points Proportional in Size to Cook's Distance Measure) and Index Influence Plot--Body Fat Example with Two Predictor Variables
+
+```{r influence, fig.height=4, fig.width=7}
+par(mfrow = c(1, 2), pch = 19)
+plot(resid(fit) ~ fitted(fit), cex = cooks.distance(fit)*10,
+     xlim = c(10, 30), ylim = c(-4.5, 4.5),
+     xlab = "YHAT", ylab = "Residual")
+title("(a) Proportional Influence Plot")
+plot(seq(nrow(.data)), cooks.distance(fit), type = "o", lwd = 2,
+     xlab = "Case Index Number", ylab = "Cook's Distance D")
+title("(b) Index Influence Plot")
+```
+
+
+TABLE 10.5     (p 409)
+----------------------------------------------------------------------------
+#### Variance Inflation Factors--Body Fat Example with Three Predictor Variables
+
+R has `vif` (*car*) for this. It takes in an lm object. To get the standardized coefficients we update the model by generically scaling the values. The maximum VIF is clear, and an average can easily be computed. I leave it to the interested student to perform that simple task.
+
+```{r}
+fit <- lm(scale(Y) ~ scale(X1) + scale(X2) + scale(X3), .data)
+cbind(
+  "Beta*" = round(as.vector(coef(fit)[-1]), 4),
+  "VIF"   = round(vif(lm(Y ~ ., .data)), 2))
+```
+
+
+Input the Surgical Unit Data
+----------------------------------------------------------------------------
+
+Note: R > 2.15 has `paste0`. No need for `sep = ""` anymore.
+
+```{r}
+.data <- CH09TA01
+names(.data) <- c(paste("X", seq(8), sep = ""), "Y" , "lnY")
+fit <- lm(lnY ~ X1 + X2 + X3 + X8, .data)
+vif(fit)  # For page 412
+```
+
+
+FIGURE 10.9     (p 411)
+----------------------------------------------------------------------------
+#### Residual and Added-Variable Plots for Surgical Unit Example--Regression Model (10.45)
+
+The *car* functions used earlier can be used to explore the unshown information discussed on page 410. This example, however, requires relating added-values from variables not within the model. Thus, it cannot be used with `residualPlots` or `avPlots`. It may be possible to fit a full model and use these functions with appropriately selected 'terms' parameters, though.
+
+```{r}
+par(mfrow = c(2, 2), pch = 19)
+
+plot(resid(fit) ~ fitted(fit), ylim = c(-0.7, 0.7),
+     xlab = "Predicted Value", ylab = "Residual")
+title("(a) Residual Plot against Predicted")
+
+plot(resid(fit) ~ .data$X5, ylim = c(-0.7, 0.7),
+     xlab = "X5", ylab = "Residual")
+title("(b) Residual Plot against X5")
+
+plot(resid(fit) ~ resid(update(fit, X5 ~ .)), ylim = c(-0.7, 0.7),
+     xlab = "e(X5|X1238)", ylab = "e(Y'|X1238)")
+title("(c) Added-Variable Plot for X5")
+abline(lm(resid(fit) ~ resid(update(fit, X5 ~ .))) )
+
+qqnorm(resid(fit), xlab = "Expected Value", ylab = "Residual", main = "")
+qqline(resid(fit))
+title("(d) Normal Probability Plot")
+```
+
+
+FIGURE 10.10     (p 413)
+----------------------------------------------------------------------------
+#### Diagnostic Plots for Surgical Unit Example
+
+```{r}
+par(mfrow = c(2, 2), pch = 19)
+
+plot(seq(nrow(.data)), rstudent(fit), type = "o",
+     main = "(a) Studentized Deleted Residuals",
+     xlab = "Case Index", ylab = "t")
+plot(seq(nrow(.data)), hatvalues(fit), type = "o",
+     main = "(b) Leverage Values",
+     xlab = "Case Index", ylab = "h")
+plot(seq(nrow(.data)), cooks.distance(fit), type = "o",
+     main = "(c) Cook's Distance",
+     xlab = "Case Index", ylab = "D")
+plot(seq(nrow(.data)), dffits(fit), type = "o",
+     main = "(d) DFFITS values",
+     xlab = "Case Index", ylab = "DFFITS")
+```
+
+
+TABLE 10.6     (p 413)
+----------------------------------------------------------------------------
+#### Various Diagnostics for Outlying Cases--Surgical Unit Example
+
+```{r}
+cases <- c(17, 23, 28, 32, 38, 42, 52)
+cbind(
+  'e'      = round(resid(fit), 4),
+  't'      = round(rstudent(fit), 4),
+  'h'      = round(hatvalues(fit), 4),
+  'D'      = round(cooks.distance(fit), 4),
+  'DFFITS' = round(dffits(fit), 4))[cases, ]
+```

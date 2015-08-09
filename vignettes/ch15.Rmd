@@ -1,0 +1,191 @@
+---
+title: "Chapter 15 Introduction to the Design of Experimental and Observational Studies"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 15}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 15 -- Introduction to the Design of Experimental and Observational Studies
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+data("CH15TA01", package = "ALSM")
+data("CH15FI01", package = "ALSM")
+data("CH15FI06", package = "ALSM")
+data("CH15FI09", package = "ALSM")
+```
+
+
+
+Input Teaching Effectiveness Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH15FI01
+names(.data) <- c("y", "x")
+```
+
+
+FIGURE 15.1     (p 645)
+----------------------------------------------------------------------------
+
+#### Teaching Performance Comparison--Teaching Effectiveness Example
+
+```{r stripchart, fig.width=12, fig.height=6}
+stripchart(split(.data$y, .data$x), method = "stack", main = "Attendance", xlab = "Rating",
+           group.names = c("Attend", "Not Attend"), pch = 19, col = "gray30")
+abline(h = 2 - 0.05)  # Add a reference line  below the 2nd group
+```
+
+
+Input Quick Bread Volume Data
+----------------------------------------------------------------------------
+
+For pedagogical reasons, a linear model on these day are presented. As the *comment* on page 646 states, ordinal data can be treated as evenly spaced interval data of a continuous nature. This is the default behavior with ordered factors in `lm`. We're still interested, however, in treating our fitted model like an ANOVA model with dummary variables. We do this by specifying the contrast used when you create a linear model with a categorical variable (dummy encoding). You can get the same results (but not necesssarily presented in the same order) by keeping the factor unordered and just making sure the *reference* level is the minimum ordered factor (in this case, "Low"). This can be done with `relevel`. 
+
+```{r}
+.data <- CH15FI06
+names(.data) <- c("y", "x")
+
+# Treat the factor as ordered
+.data <- transform(.data, x = factor(x, ordered = TRUE, levels = c("Low", "Medium", "High", "Very High")))
+
+
+# Specify appropriate contrasts to great this ordered factor as a categorical factor
+fit <- lm(y ~ x, .data, contrasts = list(x = "contr.treatment"))
+summary(fit)
+anova(fit)
+```
+
+
+
+FIGURE 15.6     (p 659)
+----------------------------------------------------------------------------
+
+#### Summary Plot--Quick Bread Volume Example
+
+R defaults to plotting boxes for factors. We'll manually plot these as interval data. It is much more convenient to just make use of `xyplot` (*lattice*) in this case
+
+> `xyplot(y ~ x, .data, ylim = c(0, 1600), pch = 19)`
+
+```{r}
+plot(y ~ unclass(x), .data, ylim = c(0, 1600), pch = 19, xaxt = 'n', xlab = "Oven Temperature", ylab = "Volume")
+axis(1, at = seq(4), labels = levels(.data$x))
+title("Summary Plot")
+```
+
+
+
+Input Blocked Quick Bread Volume Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH15FI09
+names(.data) <- c("y", "x1", "x2")
+.data <- transform(.data, x1 = factor(x1, ordered = TRUE, levels = c("Low", "Medium", "High", "Very High")))
+
+fit <- lm(y ~ x1 + x2, .data, contrasts = list(x1 = "contr.treatment"))
+summary(fit)
+anova(fit)
+```
+
+
+FIGURE 15.9     (p 662)
+----------------------------------------------------------------------------
+
+#### Summary Plot--Blocked Quick Bread Volume Optimization Example
+
+Again, the use of `xyplot` may be preferable. The `auto.key` parameter controls the legend by setting it a list of options. In this snippet below, that is to generate a 2 column legend that, in this case, will put the 2 Plant factors as a horizontal legend value. 
+
+> `xyplot(y ~ x1, .data, groups = x2, type = "b", pch = 20, auto.key = list(columns = 2))`
+
+```{r}
+plot(y ~ unclass(x1), .data, col = unclass(x2), pch = 20, xaxt = 'n', xlab = "Oven Temperature", ylab = "Volume")
+lines(y ~ unclass(x1), .data, subset = x2 == 'Plant A', col = unclass(x2))
+lines(y ~ unclass(x1), .data, subset = x2 == 'Plant B', col = unclass(x2))
+axis(1, at = seq(4), labels = levels(.data$x1))
+title("Summary Plot")
+text(3.6, 1400, "Plant B", col = 2)
+text(3.5, 1100, "Plant A")
+```
+
+
+Input Skin Sensitivity Experiment Data
+----------------------------------------------------------------------------
+
+The data is currently in a "wide" format and possibly can be reshaped using `reshape` (*stats*). However, `stack` (*utils*) will suffice. It returns the values with an indicator variable (ind) derived from the selected columns to stack; in this case, ind will consist of factors for 'control' and 'experiment'. Thus, the model will just require this long dataset combined with the subject numbers. An alternative is to use the functions, like `melt`, found in Wickham's *reshape* package. 
+
+```{r}
+.data <- CH15TA01
+names(.data) <- c("subject", "control", "experiment", "difference")
+
+.data <- transform(.data,
+                x1 = stack(.data, select = c(control, experiment))$ind,
+                x2 = factor(subject),
+                y  = stack(.data, select = c(control, experiment))$values)
+
+fit <- lm(y ~ x1 + x2, .data)
+```
+
+
+TABLE 15.1     (p 670)
+----------------------------------------------------------------------------
+
+#### Data and Descriptive Statistics--Skin Sensitivity Experiment
+
+Author error found for within-subject difference on the sample standard deviation.
+
+> `0.758 - 0.807 != 0.0501`
+
+```{r}
+tab <- xtabs(y ~ x2 + x1, .data)  # Wide format table like before
+tab <- addmargins(tab, 1, FUN = list(list('Mean' = mean, 'Std' = sd)))  # Add sample means and std. dev. to bottom margin
+tab <- addmargins(tab, 2, FUN = diff)  # Add within-subject differences to side margin
+round(tab, 4)
+```
+
+
+FIGURE 15.13                                                        (p 670) #
+----------------------------------------------------------------------------
+#### Summary Plot--Skin Sensitivity Example
+
+Since the points overplot, their x-values are randomly shifted a small amount using `jitter`. 
+
+```{r}
+x <- jitter(unclass(.data$x1), 0.12)
+plot(y ~ x, .data, pch = 19, xaxt = 'n', xlab = "Treatment", ylab = "Diameter")
+axis(1, at = seq(2), labels = levels(.data$x1))
+for (id in .data$x2)
+  lines(y ~ x, .data, subset = x2 == id)
+title("Summary Plot")
+```
+
+
+FIGURE 15.14                                                        (p 671)
+----------------------------------------------------------------------------
+
+#### Regression Results--Skin Sensitivity Experiment
+
+As the authors point out, the coefficients on the subjects don't matter as the blocking variable was included only to improve the precision of the comparison between control and experimental treatments. The coefficients will be different from what the book has because it uses a different reference level. R uses the first factor as the reference level. The book (15.18) defines the model as using reference level 20 (the variable left out of the X_ij assignment). Thus, if you use `relevel` to change the reference level to 20, you'll get the same subject coefficients.
+
+```{r}
+summary(fit)
+anova(fit)
+anova(lm(y ~ x1, .data), fit)  # (15.20)
+```

@@ -1,0 +1,103 @@
+---
+title: "Chapter 1 Linear Regression With One Predictor Variable"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 1}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 1 -- Linear Regression With One Predictor Variable
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+options(width = 100)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+data("CH01TA01", package = "ALSM")
+```
+
+
+Input the Toluca Company Data
+----------------------------------------------------------------------------
+
+```{r}
+.data        <- CH01TA01     # Assign a data set to an R object
+names(.data) <- c("x", "y")  # Give useful, albeit arbitrary, names to our variables
+```
+
+
+TABLE 1.1     (p 19)
+----------------------------------------------------------------------------
+#### Data on Lot Size and Work Hours and Needed Calculations for Least Squares Estimates--Toluca Company Example 
+
+```{r}
+xx <- scale(.data[, 'x'], TRUE, FALSE)  # Center the x values
+yy <- scale(.data[, 'y'], TRUE, FALSE)  # Center the y values
+
+# Create a table for our output
+tab <- transform(.data,                 
+  x      = x,
+  y      = y,
+  xdif   = xx,
+  ydif   = yy,
+  crp    = round(xx * yy),
+  sqdevx = xx^2,
+  sqdevy = round(yy^2))
+
+# Append summary rows to our table
+tab <- rbind(                       
+  tab,
+  Total = round(apply(tab, 2, sum), 0),
+  Mean  = c(colMeans(.data), rep("", 5)))
+
+print(tab, quote = FALSE)
+```
+
+
+FIGURE 1.10 and 1.11     (p 20)
+----------------------------------------------------------------------------
+#### Scatter Plot and Fitted Regression Line--Toluca Company Example Regression Output--Toluca Company Example
+
+```{r}
+fit <- lm(y ~ x, data = .data)  # Fit the linear regression model
+summary(fit)                 # Output summary information for this model
+
+plot(y ~ x, .data,  xlab = "Lot Size", ylab = "Hours", pch = 20)
+title("(a) Scatter Plot")  # Add a title to the current device plot
+
+# notice the different ways by which to issue plot commands
+with(.data, plot(x, y, xlab = "Lot Size", ylab = "Hours", pch = 20))
+title("(b) Fitted Regression Line")  # Add a title to the current device plot
+abline(fit)                          # Add a trend line for this fitted model
+```
+
+
+TABLE 1.2     (p 22)
+----------------------------------------------------------------------------
+#### Fitted Values, Residuals, and Squared Residuals--Toluca Company Example
+
+Notice the use of "accessor" methods `fitted` and `resid`. They are the recommended way of obtaining fitted values and residuals instead of direct named list element access such as `fit[["residuals"]]`
+
+```{r}
+tab <- cbind(
+  "Lot Size (X)"       = .data$x,
+  "Work Hours (Y)"     = .data$y,
+  "Est. Mean Response" = round(fitted(fit),   2),
+  "Residuals"          = round( resid(fit),   2),
+  "Sq.Residuals"       = round( resid(fit)^2, 1))
+
+rbind(tab, Totals = colSums(tab))
+```

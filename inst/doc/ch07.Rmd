@@ -1,0 +1,247 @@
+---
+title: "Chapter 7 Multiple Regression II"
+author: "Bryan Goodrich"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 7
+vignette: >
+  %\VignetteIndexEntry{Chapter 7}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+**********
+Chapter 7 -- Multiple Regression II
+================================================================================
+**********
+
+```{r set-global-opts, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, tidy=FALSE)
+```
+
+Load the data sets
+----------------------------------------------------------------------------
+
+```{r}
+data("CH07TA01", package = "ALSM")
+data("CH06FI05", package = "ALSM")
+data("CH07TA06", package = "ALSM")
+```
+
+Input the Body Fat Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH07TA01
+names(.data) <- c("x1", "x2", "x3", "y")
+fit <- lm(y ~ x1 + x2 + x3, .data)
+```
+
+
+TABLE 7.1     (p 257)
+----------------------------------------------------------------------------
+#### Basic Data--Body Fat Example
+
+```{r}
+with(.data, cbind("Triceps"  = x1,
+               "Thigh"    = x2,
+               "Midarm"   = x3,
+               "Body Fat" = y))
+```
+
+
+TABLE 7.2     (p 257)
+----------------------------------------------------------------------------
+#### Regression Results for Several Fitted Models--Body Fat Example
+
+One thing to realize with R ANOVA results is that it doesn't give you an SSR for the entire regression. Instead, it gives you the sum of squares for the first term in the model, then the extra from the addition of the second term, and so on. With their example of `y ~ x1 + x2` we have `SSR = 385.44`; however, the ANOVA results provided would need to be aggregated to obtain that answer. Therefore, what we require is:
+
+> `SSR(x1) + SSR(x2|x1) = 352.27 + 33.17 = 385.44 = SSR(x1, x2)`
+
+So be aware that the R ANOVA results provide the extra SS directly, depending on how the terms were entered into the model.
+
+```{r}
+summary(lm(y ~ x1, .data))
+anova(lm(y ~ x1, .data))
+summary(lm(y ~ x2, .data))
+anova(lm(y ~ x2, .data))
+summary(lm(y ~ x1 + x2, .data))
+anova(lm(y ~ x1 + x2, .data))
+summary(fit)
+anova(fit)
+```
+
+
+TABLE 7.4     (p 262)
+----------------------------------------------------------------------------
+#### ANOVA Table with Decomposition of SSR--Body Fat Example
+
+For numeric subscripting, the following will be utilized
+
+```
+   Number    Rows                      Columns
+   1         x1        (x1)            Df
+   2         x2        (x2 | x1)       Sum Sq
+   3         x3        (x3 | x1, x2)   Mean Sq
+   4         Residuals (pure error)
+```
+
+The code below compiles each column row-wise. Naming is only required for each record once, but indentation is provided for clarity.
+
+```{r}
+fit.aov <- anova(fit)
+tab <- as.table(cbind(
+  'SS' = c("SSR(x1, x2, x3)" = sum(fit.aov[1:3, 2]),
+         "SSR(x1)"           = fit.aov[1, 2],
+         "SSR(x2|x1)"        = fit.aov[2, 2],
+         "SSR(x3|x1, x2)"    = fit.aov[3, 2],
+         "SSE"               = fit.aov[4, 2],
+         "Total"             = sum(fit.aov[, 2])),
+  
+  'Df' = c(                    sum(fit.aov[1:3, 1]),
+                               fit.aov[1, 1],
+                               fit.aov[2, 1],
+                               fit.aov[3, 1],
+                               fit.aov[4, 1],
+                               sum(fit.aov$Df)),
+  
+  'MS' = c(                    sum(fit.aov[1:3, 2]) / sum(fit.aov[1:3, 1]),
+                               fit.aov[1, 3],
+                               fit.aov[2, 3],
+                               fit.aov[3, 3],
+                               fit.aov[4, 3],
+                               NA)
+))
+
+round(tab, 2)
+```
+
+
+
+
+Uses of Extra Sums of Squares in Tests for Regression Coefficients    (p 264)
+----------------------------------------------------------------------------
+#### Test Whether A Single Coefficient Can Be Dropped (i.e., bk = 0)
+
+Since the above example demonstrates how to extract each of the components in an extra SS analysis, I will assume the reader can figure out how to compute the arithmetic with those components. Instead, here will be two ways to perform the same analysis. The `anova` function can compare models in precisely this way. R also has the `drop1` that does the same test for each of possible "drop 1 term" models.
+
+```{r}
+anova(update(fit, . ~ . - x3), fit)  # the "." indicates "old model terms"
+drop1(fit, test = "F")               # Alternative for each term
+```
+
+
+Uses of Extra Sums of Squares in Tests for Regression Coefficients    (p 265)
+----------------------------------------------------------------------------
+#### Test Whether Several Coefficients Can Be Dropped
+
+```{r}
+anova(lm(y ~ x1, .data), fit)
+```
+
+
+Coefficients of Partial Determination and Correlation     (p 270-1)
+----------------------------------------------------------------------------
+
+```{r}
+sign.1 <- sign(coef(lm(y ~ x1 + x2, .data)))[["x1"]]
+sign.2 <- sign(coef(lm(y ~ x1 + x2, .data)))[["x2"]]
+sign.3 <- sign(coef(fit))[["x3"]]
+
+rbind(
+  "2|1"  =  c("Rsq" = anova(fit)["x2", 2] / anova(lm(y ~ x1, .data))["Residuals", 2],
+              "r"   = sign.2 * sqrt(anova(fit)["x2", 2] / anova(lm(y ~ x1, .data))["Residuals", 2])),
+  
+  "3|12" = c(         anova(fit)["x3", 2] / anova(lm(y ~ x1 + x2, .data))["Residuals", 2],
+                      sign.3 * sqrt(anova(fit)["x3", 2] / anova(lm(y ~ x1 + x2, .data))["Residuals", 2])),
+  
+  "1|2"  = c(         anova(lm(y ~ x2 + x1, .data))["x1", 2] / anova(lm(y ~ x2, .data))["Residuals", 2],
+                      sign.1 * sqrt(anova(lm(y ~ x2 + x1, .data))["x1", 2] / anova(lm(y ~ x2, .data))["Residuals", 2]))
+)
+```
+
+
+
+Input the Dwaine Studios Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH06FI05
+names(.data) <- c("x1", "x2", "y")
+```
+
+
+TABLE 7.5     (pp 276-7)
+----------------------------------------------------------------------------
+#### Correlation Transformation and Fitted Standardized Regression Model--Dwaine Studios Example
+
+```{r}
+with(.data, cbind(Sales = y, Population = x1, Income = x2))  # Table 7.5(a)
+
+# Data used in this model is a standardized transform, performed inline
+fit <- lm(y ~ 0 + x1 + x2, data =
+  transform(.data,   
+    y  = c(scale(y )) / sqrt(nrow(.data) - 1),
+    x1 = c(scale(x1)) / sqrt(nrow(.data) - 1),
+    x2 = c(scale(x2)) / sqrt(nrow(.data) - 1)))
+
+model.frame(fit)  # Table 7.5(b) Transformed Data
+
+coef(fit)
+
+# Return to regular coefficients
+with(.data, coef(fit) * c(sd(y) / sd(x1), sd(y) / sd(x2)))  # (7.53)
+```
+
+
+Input the Work Crew Productivity Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH07TA06
+names(.data) <- c("x1", "x2", "y")
+```
+
+
+TABLE 7.6     (p 279)
+----------------------------------------------------------------------------
+#### Uncorrelated Predictor Variables--Work Crew Productivity Example
+
+```{r}
+cbind("Crew Size"         = .data$x1,
+      "Bonus Pay"         = .data$x2,
+      "Crew Productivity" = .data$y)
+```
+
+
+TABLE 7.7     (p 280)
+----------------------------------------------------------------------------
+#### Regression Results when Predictor Variables Are Uncorrelated--Work Crew Productivity Example
+
+```{r}
+anova(lm(y ~ .,  .data))
+anova(lm(y ~ x1, .data))
+anova(lm(y ~ x2, .data))
+```
+
+
+Input the Body Fat Data
+----------------------------------------------------------------------------
+
+```{r}
+.data <- CH07TA01
+names(.data) <- c("x1", "x2", "x3", "y")
+```
+
+
+FIGURE 7.3     (p 284)
+----------------------------------------------------------------------------
+#### Scatter Plot Matrix and Correlation Matrix of the Predictor Variables--Body Fat Example
+
+```{r}
+with(.data, pairs(cbind(x1, x2, x3), pch=19))
+with(.data, cor(cbind(x1, x2, x3)))
+```
+
