@@ -7,7 +7,7 @@ For convenience I have consolidated my new Python Jupyter notebooks for ALSM int
 Therefore, enjoy these notebooks. Contribute if you have time. I do not plan to maintain this package, but it was a fun exercise I can always use for reference, which I still do with my legacy R package whenever I have to do R statistics, again. 
 
 
-### Legacy R Package Nodes
+### Legacy R Package Notes
 
 This R package provides data and code for all of the tables and figures, to the extent I've completed them. Nearly all examples are provided, save for some advanced materials I wasn't prepared for some years ago when I coded this (e.g., neural networks). These will be updated in later versions of this package.  
 
