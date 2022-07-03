@@ -2,9 +2,11 @@
 
 ### Python Notebooks
 
-For convenience I have consolidated my new Python Jupyter notebooks for ALSM into my legacy R package. The aim is the same, to teach you how to do applied statistics through the ALSM text and coding practices that you can adopt in your professional life. I moved from data science to data engineering, and with that to Python from R. When a machine learning opportunity arose to investigate non-linear models, I was reminded that I do not know all the ways to do statistics in Python. I do not have an intuition when it comes to which packages to use or how to manipulate Pandas dataframes in the ways I did R or do with Spark, today. 
+For convenience I have consolidated my new Python Jupyter notebooks for ALSM into my legacy R package. The aim is this update is the same, to teach you how to do applied statistics through the ALSM text and using Python coding practices that you can adopt in your professional life. 
 
-Therefore, enjoy these notebooks. Contribute if you have time. I do not plan to maintain this package, but it was a fun exercise I can always use for reference, which I still do with my legacy R package whenever I have to do R statistics, again. 
+I moved from data science to data engineering, and with that from R to Python. When a machine learning opportunity arose to investigate non-linear models, I was reminded I am not versed in doing statistics in Python, even though I know most of the algorithms used in my R code should be available in Python standard packages. Also, I do not have an intuition when it comes to which packages to use or how to manipulate Pandas dataframes in the ways I did R or do with Spark, today. This was a very useful exercise in the end! 
+
+I hope you enjoy these notebooks. I may finish chapter 13 and do 14. I have no intention, at this time, to work on the 2nd half of the book, focused on design of experiments. I welcome any contributions from the community; send me those pull requests!
 
 
 ### Legacy R Package Notes
